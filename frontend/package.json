@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test src/features/chat/model.test.ts",
     "preview": "vite preview",
     "prettify": "prettier . -w -l"
   },

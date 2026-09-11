@@ -30,7 +30,16 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & ButtonVariantProps
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ children, variant, size, color, className, disabled, ...props }, ref) => {
   return (
-    <button ref={ref} className={cn(buttonVariants({ variant: disabled ? 'disabled' : variant, size, color, className }))} {...props}>
+    <button
+      ref={ref}
+      type="button"
+      disabled={disabled}
+      className={cn(
+        buttonVariants({ variant: disabled ? 'disabled' : variant, size, color, className }),
+        'focus-visible:ring-primary focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
+      )}
+      {...props}
+    >
       {children}
     </button>
   )

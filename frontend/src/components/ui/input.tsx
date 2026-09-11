@@ -7,7 +7,7 @@ const inputVariants = cva(
   {
     variants: {
       intent: {
-        default: 'border-gray-300',
+        default: 'border-input bg-background text-foreground',
         error: 'border-red-500 text-red-700 placeholder-red-300 focus:ring-red-500 focus:border-red-500',
         success: 'border-green-500 text-green-700 placeholder-green-300 focus:ring-green-500 focus:border-green-500',
       },
@@ -25,7 +25,7 @@ const inputVariants = cva(
 )
 
 type InputPropsVariants = VariantProps<typeof inputVariants>
-type InputProps = InputHTMLAttributes<HTMLInputElement> & InputPropsVariants
+type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> & InputPropsVariants
 
 const Input = forwardRef<HTMLInputElement, InputProps>(({ className, intent, size, ...props }, ref) => {
   return <input ref={ref} type="text" className={cn(inputVariants({ intent, size, className }))} {...props} />

@@ -1,20 +1,22 @@
 import { useState } from 'react'
-
-// Icons
-import { LuSun } from 'react-icons/lu'
-import { LuMoon } from 'react-icons/lu'
+import { LuMoon, LuSun } from 'react-icons/lu'
+import Button from './Button'
 
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState<boolean>(false)
-
-  const handleThemeChange = () => {
-    setIsDark(!isDark)
-    document.documentElement.classList.toggle('dark')
-  }
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
 
   return (
-    <button onClick={handleThemeChange} className="bg-surface hover:bg-surface-2 cursor-pointer rounded-full p-2">
-      {isDark ? <LuSun className="size-7" /> : <LuMoon className="size-7" />}
-    </button>
+    <Button
+      variant="ghost"
+      aria-label={isDark ? 'Включить светлую тему' : 'Включить тёмную тему'}
+      title={isDark ? 'Светлая тема' : 'Тёмная тема'}
+      onClick={() => {
+        document.documentElement.classList.toggle('dark', !isDark)
+        setIsDark(!isDark)
+      }}
+      className="text-foreground rounded-full p-2"
+    >
+      {isDark ? <LuSun className="size-5" /> : <LuMoon className="size-5" />}
+    </Button>
   )
 }
