@@ -16,8 +16,9 @@ from pydantic import ConfigDict, Field, TypeAdapter
 from src.pydantic_base import BaseSchema
 
 
-DEFAULT_INPUT = Path(__file__).parent.parent / "data" / "Выгрузка СТП за 2026.xlsx"
-DEFAULT_TOPICS_INPUT = Path(__file__).parent / "data" / "Темы_подтемы_обращений.xlsx"
+DEFAULT_INPUT = Path(__file__).parent.parent.parent / "data" / "Выгрузка СТП за 2026.xlsx"
+DEFAULT_TOPICS_INPUT = Path(__file__).parent.parent.parent / "data" / "Темы_подтемы_обращений.xlsx"
+DEFAULT_OUTPUT = Path(__file__).parent.parent / "dataset_requests.parquet"
 SOURCE_COLUMNS = ["Тема", "Описание", "Решение", "Влияние"]
 SUBTOPIC_PREFIX = r"(?i)^\s*Подтема запроса:\s*([^/]*)/\s*"
 
@@ -94,7 +95,10 @@ def convert(source: Path, destination: Path) -> pl.DataFrame:
         .str.strip_chars()
         .alias("question"),
         pl.col("Решение").str.strip_chars().alias("answer"),
-        pl.col("Влияние").str.strip_chars().alias("impact"),
+        pl.col("Влияние")
+        .str.strip_chars()
+        .cast(pl.Enum([impact.value for impact in Impact]))
+        .alias("impact"),
     )
     # Validation errors include the zero-based record index and field name.
     # Missing subtopics are allowed; nulls in other fields are not.
@@ -112,6 +116,7 @@ def main() -> None:
     parser.add_argument(
         "-o", "--output", type=Path,
         help="Output path (default: input path with .parquet extension).",
+        default=DEFAULT_OUTPUT,
     )
     parser.add_argument("--topics-input", type=Path, default=DEFAULT_TOPICS_INPUT)
     parser.add_argument(
