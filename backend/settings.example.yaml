@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=settings.schema.yaml
+$schema: "./settings.schema.yaml"
+environment: development
+database_uri: mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin # replace 127.0.0.1 with db in Docker
