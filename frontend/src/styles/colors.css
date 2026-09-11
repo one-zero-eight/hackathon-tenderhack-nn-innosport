@@ -1,0 +1,93 @@
+@theme {
+  /* Base themed colors */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+}
+
+:root {
+  color-scheme: light;
+
+  /* Core brand colors */
+  --primary: var(--color-blue-500);
+  --primary-foreground: white;
+
+  --secondary: rgb(221 226 233);
+  --secondary-foreground: rgb(175, 179, 192);
+
+  --accent: rgb(241, 245, 249);
+  --accent-foreground: rgb(15, 23, 42);
+
+  --success: rgb(25, 154, 72);
+  --success-foreground: white;
+
+  --warning: rgb(245, 159, 10);
+  --warning-foreground: white;
+
+  --error: rgb(215, 58, 58);
+  --error-foreground: white;
+
+  /* Layout colors */
+  --background: white;
+  --foreground: rgb(15, 23, 42);
+
+  --surface: white;
+  --surface-2: rgb(248, 250, 252);
+
+  --border: rgb(226, 232, 240);
+  --input: rgb(226, 232, 240);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --primary: var(--color-blue-600);
+  --primary-foreground: white;
+
+  --secondary: rgb(30, 32, 35);
+  --secondary-foreground: rgb(77, 82, 90);
+
+  --accent: rgb(37, 42, 50);
+  --accent-foreground: rgb(226, 232, 240);
+
+  --success: rgb(25, 154, 72);
+  --success-foreground: rgb(220, 255, 230);
+
+  --warning: rgb(245, 159, 10);
+  --warning-foreground: white;
+
+  --error: rgb(215, 58, 58);
+  --error-foreground: white;
+
+  --background: rgb(10, 12, 16);
+  --foreground: rgb(226, 232, 240);
+
+  --surface: rgb(15, 17, 23);
+  --surface-2: rgb(22, 25, 32);
+
+  --border: rgb(50, 55, 65);
+  --input: rgb(50, 55, 65);
+}
