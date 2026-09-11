@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { LuMessageSquare, LuPlus, LuSearch, LuSparkles } from 'react-icons/lu'
+import { LuMessageSquare, LuPlus, LuSearch } from 'react-icons/lu'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/input'
 import type { Chat } from '@/features/chat/types'
@@ -19,14 +19,6 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
   return (
     <div className="bg-surface-2 flex h-full flex-col">
       <div className="space-y-6 px-4 pt-6 pb-4">
-        <div className="flex items-center gap-2.5 px-2">
-          <span className="bg-primary text-primary-foreground grid size-8 place-items-center rounded-xl">
-            <LuSparkles className="size-4" />
-          </span>
-          <span className="text-lg font-semibold tracking-tight">
-            InnoSport<span className="text-primary">.</span>
-          </span>
-        </div>
         <Button onClick={onCreate} variant="outline" className="bg-background flex w-full items-center justify-center gap-2 rounded-xl py-3">
           <LuPlus className="size-4" />
           Новое обращение

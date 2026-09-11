@@ -1,38 +1,55 @@
+import { useId, useState } from 'react'
 import type { ChatMessage } from '@/features/chat/types'
 
 export default function ChatOutline({ messages, activeId, onNavigate }: { messages: ChatMessage[]; activeId: string; onNavigate: (id: string) => void }) {
+  const [preview, setPreview] = useState<{ id: string; top: number } | null>(null)
+  const tooltipId = useId()
   const questions = messages.flatMap((message, index) => {
     if (message.role !== 'user') return []
     const response = messages.slice(index + 1).find((item) => item.role === 'assistant')
     return [{ message, response }]
   })
+  const visibleQuestion = questions.find(({ message }) => message.id === preview?.id)
+
+  function showPreview(id: string, element: HTMLElement) {
+    const rect = element.getBoundingClientRect()
+    // Reserve the tooltip's maximum height plus a 16px viewport margin.
+    setPreview({ id, top: Math.max(16, Math.min(rect.top + rect.height / 2 - 64, window.innerHeight - 144)) })
+  }
 
   if (!questions.length) return null
 
   return (
-    <nav aria-label="Навигация по обращению" className="absolute top-5 right-4 z-20">
-      <ol className="flex flex-col items-end">
-        {questions.map(({ message, response }, index) => {
+    <nav
+      aria-label="Навигация по обращению"
+      className="absolute top-24 right-4 z-20"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') setPreview(null)
+      }}
+    >
+      <ol className="flex max-h-[calc(100dvh-12rem)] flex-col items-end overflow-y-auto" onScroll={() => setPreview(null)}>
+        {questions.map(({ message }, index) => {
           const active = activeId === message.id
           return (
-            <li key={message.id} className="group/item relative flex h-4 w-10 items-center justify-end">
-              <div
-                role="tooltip"
-                className="border-border bg-surface-2 pointer-events-none invisible absolute top-1/2 right-full mr-3 w-80 max-w-[calc(100vw-5rem)] -translate-y-1/2 rounded-xl border px-4 py-3 text-left opacity-0 shadow-xl transition-[opacity,transform,visibility] duration-150 group-hover/item:visible group-hover/item:-translate-x-1 group-hover/item:opacity-100 group-focus-within/item:visible group-focus-within/item:-translate-x-1 group-focus-within/item:opacity-100"
-              >
-                <p className="truncate text-sm font-medium">{message.content}</p>
-                {response && <p className="text-foreground/45 mt-1 line-clamp-2 text-xs leading-5">{response.content}</p>}
-              </div>
+            <li key={message.id} className="group/item flex h-4 w-10 shrink-0 items-center justify-end">
               <button
                 type="button"
-                onClick={() => onNavigate(message.id)}
+                onMouseEnter={(event) => showPreview(message.id, event.currentTarget)}
+                onMouseLeave={() => setPreview(null)}
+                onFocus={(event) => showPreview(message.id, event.currentTarget)}
+                onBlur={() => setPreview(null)}
+                onClick={() => {
+                  setPreview(null)
+                  onNavigate(message.id)
+                }}
                 aria-label={`Перейти к вопросу ${index + 1}: ${message.content}`}
+                aria-describedby={visibleQuestion?.message.id === message.id ? tooltipId : undefined}
                 aria-current={active ? 'location' : undefined}
-                className="focus-visible:ring-primary flex h-full w-full cursor-pointer items-center justify-end rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                className="focus-visible:ring-primary flex h-full w-full cursor-pointer items-center justify-end rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
               >
                 <span
                   className={`block h-0.5 rounded-full transition-[width,background-color] duration-150 ${
-                    active ? 'bg-foreground w-7' : 'bg-foreground/35 w-3 group-hover/item:w-5 group-hover/item:bg-foreground/65 group-focus-within/item:w-5 group-focus-within/item:bg-foreground/65'
+                    active ? 'bg-foreground w-7' : 'bg-foreground/35 group-hover/item:bg-foreground/65 group-focus-within/item:bg-foreground/65 w-3 group-focus-within/item:w-5 group-hover/item:w-5'
                   }`}
                 />
               </button>
@@ -40,6 +57,17 @@ export default function ChatOutline({ messages, activeId, onNavigate }: { messag
           )
         })}
       </ol>
+      {visibleQuestion && preview && (
+        <div
+          id={tooltipId}
+          role="tooltip"
+          style={{ top: preview.top }}
+          className="border-border bg-surface-2 pointer-events-none fixed right-20 max-h-[min(8rem,calc(100dvh-2rem))] w-80 max-w-[calc(100vw-6rem)] overflow-hidden rounded-xl border px-4 py-3 text-left shadow-xl"
+        >
+          <p className="truncate text-sm font-medium">{visibleQuestion.message.content}</p>
+          {visibleQuestion.response && <p className="text-foreground/45 mt-1 line-clamp-2 text-xs leading-5">{visibleQuestion.response.content}</p>}
+        </div>
+      )}
     </nav>
   )
 }
