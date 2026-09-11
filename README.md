@@ -2,22 +2,35 @@
 
 > by InNoHassle
 
-Here goes meow meow description
+InnoSport is built with React, TypeScript, and TanStack Start.
 
 ## Stack
 
-React 🤮
+- React 19
+- TypeScript
+- TanStack Start
+- TanStack Router
+- Vite
+- pnpm
 
-## Usage
+## Getting started
 
-Replace the contents of `README.md` with your project's:
+```bash
+pnpm install
+pnpm dev
+```
 
-- Name
-- Description
-- Installation instructions
-- Usage instructions
+The development server runs at `http://localhost:3000`.
 
-Feel free to remove any sections that aren't applicable to your project.
+## Production build
+
+```bash
+pnpm build
+pnpm preview
+```
+
+Routes live in `src/routes`. TanStack Router generates `src/routeTree.gen.ts`
+automatically when the development server or production build runs.
 
 ## Team
 
