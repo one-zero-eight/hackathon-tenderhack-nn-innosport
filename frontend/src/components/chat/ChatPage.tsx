@@ -172,8 +172,8 @@ export default function ChatPage() {
                     {closed ? (chat.activeChat.handoff.simulated ? 'Демонстрационная передача специалисту сохранена' : 'Обращение было передано специалисту') : chat.activeChat.handoff.simulated ? 'Деморежим: ожидаем специалиста' : 'Ожидаем специалиста'}
                   </p>
                 )}
-                {!closed && !chat.activeChat.handoff && chat.clarificationCount >= 3 && <SpecialistContact busy={chat.busy} onContact={chat.contactSpecialist} />}
                 <ChatStatusActions closed={closed} busy={chat.busy} onClose={chat.closeChat} onReopen={chat.reopenChat} />
+                {!closed && !chat.activeChat.handoff && chat.clarificationCount >= 3 && <SpecialistContact busy={chat.busy} onContact={chat.contactSpecialist} />}
                 {!closed && <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} awaitingClarification={!!chat.pendingClarification} />}
               </div>
             </div>

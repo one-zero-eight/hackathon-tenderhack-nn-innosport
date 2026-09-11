@@ -16,8 +16,8 @@ export default function ChatStatusActions({ closed, busy, onClose, onReopen }: {
       </div>
     )
   return (
-    <div className="mb-2 flex justify-end">
-      <Button variant="ghost" size="sm" className="text-foreground/55 whitespace-normal" disabled={busy} onClick={onClose}>
+    <div className="mb-2 flex justify-end pr-4">
+      <Button variant="ghost" size="sm" className="text-foreground/55 flex w-40 justify-center" disabled={busy} onClick={onClose}>
         Закрыть обращение
       </Button>
     </div>
