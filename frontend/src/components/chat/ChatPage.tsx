@@ -146,22 +146,6 @@ export default function ChatPage() {
             </div>
             <div className="bg-background shrink-0 px-4 pt-2 pb-4 sm:px-8">
               <div className="mx-auto max-w-3xl">
-                {!nearBottom && messages.length > 0 && (
-                  <div className="mb-3 flex justify-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const element = scrollRef.current
-                        if (element) element.scrollTop = element.scrollHeight
-                        stickToBottom.current = true
-                      }}
-                      className="bg-background flex items-center gap-2 rounded-full"
-                    >
-                      <LuArrowDown className="size-3" />К последнему сообщению
-                    </Button>
-                  </div>
-                )}
                 {chat.error && (
                   <p role="alert" className="border-error/20 bg-error/5 text-error mb-3 rounded-xl border p-3 text-sm">
                     {chat.error}
@@ -172,7 +156,30 @@ export default function ChatPage() {
                     {closed ? (chat.activeChat.handoff.simulated ? 'Демонстрационная передача специалисту сохранена' : 'Обращение было передано специалисту') : chat.activeChat.handoff.simulated ? 'Деморежим: ожидаем специалиста' : 'Ожидаем специалиста'}
                   </p>
                 )}
-                <ChatStatusActions closed={closed} busy={chat.busy} onClose={chat.closeChat} onReopen={chat.reopenChat} />
+                <ChatStatusActions
+                  closed={closed}
+                  busy={chat.busy}
+                  latestAction={
+                    !nearBottom && messages.length > 0 ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label="К последнему сообщению"
+                        onClick={() => {
+                          const element = scrollRef.current
+                          if (element) element.scrollTop = element.scrollHeight
+                          stickToBottom.current = true
+                        }}
+                        className="bg-background flex items-center gap-2 rounded-full"
+                      >
+                        <LuArrowDown className="size-3" />
+                        <span className="hidden sm:inline">К последнему сообщению</span>
+                      </Button>
+                    ) : undefined
+                  }
+                  onClose={chat.closeChat}
+                  onReopen={chat.reopenChat}
+                />
                 {!closed && !chat.activeChat.handoff && chat.clarificationCount >= 3 && <SpecialistContact busy={chat.busy} onContact={chat.contactSpecialist} />}
                 {!closed && <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} awaitingClarification={!!chat.pendingClarification} />}
               </div>
