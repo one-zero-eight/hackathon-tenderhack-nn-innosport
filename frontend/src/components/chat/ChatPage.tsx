@@ -98,9 +98,9 @@ export default function ChatPage() {
                     <span className="border-primary/10 bg-primary/5 text-primary mx-auto mb-6 grid size-16 place-items-center rounded-2xl border">
                       <LuSparkles className="size-7" />
                     </span>
-                    <p className="text-primary mb-3 text-xs font-medium tracking-[0.2em] uppercase">InnoSport · Помощник</p>
-                    <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Чем можем помочь?</h2>
-                    <p className="text-foreground/55 mx-auto mt-4 max-w-md text-sm leading-7">Опишите ваш вопрос — ассистент поможет разобраться и при необходимости уточнит детали.</p>
+                    <p className="text-primary text-ui-small mb-3 font-medium tracking-[0.2em] uppercase">InnoSport · Помощник</p>
+                    <h2 className="text-ui-title font-semibold tracking-tight">Чем можем помочь?</h2>
+                    <p className="text-foreground/55 text-ui-body mx-auto mt-4 max-w-md leading-7">Опишите ваш вопрос — ассистент поможет разобраться и при необходимости уточнит детали.</p>
                   </section>
                 ) : (
                   <div className="space-y-8">
@@ -112,20 +112,19 @@ export default function ChatPage() {
                         data-user-message={message.role === 'user' ? '' : undefined}
                         className={`scroll-mt-6 ${message.role === 'user' ? 'ml-auto max-w-[90%] sm:max-w-[80%]' : 'w-full'}`}
                       >
-                        <div className={`text-foreground/40 mb-2 flex items-center gap-2 text-xs ${message.role === 'user' ? 'justify-end' : ''}`}>
+                        <div className={`text-foreground/40 text-ui-small mb-2 flex items-center gap-2 ${message.role === 'user' ? 'justify-end' : ''}`}>
                           {message.role === 'assistant' && (
                             <span className="bg-primary/10 text-primary grid size-6 place-items-center rounded-lg">
                               <LuSparkles className="size-3" />
                             </span>
                           )}
                           <span>{message.role === 'user' ? 'Вы' : message.kind === 'notice' ? 'Статус обращения' : 'Ассистент'}</span>
-                          {message.clarificationId && <span className="bg-primary/5 text-primary rounded px-1.5 py-0.5 text-[10px]">Уточнение</span>}
-                          <time dateTime={message.createdAt} className="text-[10px]">
+                          <time dateTime={message.createdAt} className="text-ui-small">
                             {new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                           </time>
                         </div>
-                        <div className={`text-sm leading-7 break-words whitespace-pre-wrap ${message.role === 'user' ? 'bg-surface-2 rounded-2xl rounded-tr-md px-5 py-3' : 'text-foreground/85'}`}>{message.content}</div>
-                        {message.kind === 'handoff' && chat.activeChat.handoff?.simulated && <p className="text-foreground/45 mt-2 text-xs">Демонстрация: реальная заявка не отправлена, связь со специалистом не установлена.</p>}
+                        <div className={`text-ui-body leading-7 break-words whitespace-pre-wrap ${message.role === 'user' ? 'bg-surface-2 rounded-2xl rounded-tr-md px-5 py-3' : 'text-foreground/85'}`}>{message.content}</div>
+                        {message.kind === 'handoff' && chat.activeChat.handoff?.simulated && <p className="text-foreground/45 text-ui-small mt-2">Демонстрация: реальная заявка не отправлена, связь со специалистом не установлена.</p>}
                         {message.clarification && (
                           <ClarificationCard request={message.clarification} answered={messages.some((item) => item.clarificationId === message.clarification?.id)} busy={chat.busy} closed={closed} onAnswer={chat.answer} />
                         )}
@@ -137,7 +136,7 @@ export default function ChatPage() {
                   <BotFeedbackCard key={chat.activeChatId} feedback={chat.activeChat.feedback} waitingForSpecialist={!!chat.activeChat.handoff && !closed} busy={chat.busy} onSubmit={chat.submitFeedback} onDismiss={chat.dismissFeedback} />
                 )}
                 {chat.busy && (
-                  <div role="status" className="text-foreground/50 mt-6 flex items-center gap-2 text-sm">
+                  <div role="status" className="text-foreground/50 text-ui-body mt-6 flex items-center gap-2">
                     <LuLoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
                     Готовим ответ…
                   </div>
@@ -147,12 +146,12 @@ export default function ChatPage() {
             <div className="bg-background shrink-0 px-4 pt-2 pb-4 sm:px-8">
               <div className="mx-auto max-w-3xl">
                 {chat.error && (
-                  <p role="alert" className="border-error/20 bg-error/5 text-error mb-3 rounded-xl border p-3 text-sm">
+                  <p role="alert" className="border-error/20 bg-error/5 text-error text-ui-body mb-3 rounded-xl border p-3">
                     {chat.error}
                   </p>
                 )}
                 {chat.activeChat.handoff && (
-                  <p role="status" className="text-primary mb-3 text-center text-sm">
+                  <p role="status" className="text-primary text-ui-body mb-3 text-center">
                     {closed ? (chat.activeChat.handoff.simulated ? 'Демонстрационная передача специалисту сохранена' : 'Обращение было передано специалисту') : chat.activeChat.handoff.simulated ? 'Деморежим: ожидаем специалиста' : 'Ожидаем специалиста'}
                   </p>
                 )}

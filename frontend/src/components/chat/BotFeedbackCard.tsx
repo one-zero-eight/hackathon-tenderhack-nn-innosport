@@ -31,13 +31,12 @@ export default function BotFeedbackCard({
   if (feedback)
     return (
       <section aria-label="Оценка работы бота" className="border-border bg-surface-2 mt-6 space-y-2 rounded-2xl border p-5">
-        <p className="flex items-center gap-2 text-sm font-medium">
+        <p className="text-ui-body flex items-center gap-2 font-medium">
           <LuCheck className="text-success size-4" />
           Спасибо за обратную связь!
         </p>
-        <p className="text-foreground/60 text-sm">Ваша оценка: {ratings.find((item) => item.value === feedback.rating)?.label}</p>
-        {feedback.comment && <p className="text-foreground/50 text-sm break-words whitespace-pre-wrap">{feedback.comment}</p>}
-        <p className="text-foreground/40 text-xs">Оценка сохранена на этом устройстве.</p>
+        <p className="text-foreground/60 text-ui-body">Ваша оценка: {ratings.find((item) => item.value === feedback.rating)?.label}</p>
+        {feedback.comment && <p className="text-foreground/50 text-ui-body break-words whitespace-pre-wrap">{feedback.comment}</p>}
       </section>
     )
   return (
@@ -45,10 +44,10 @@ export default function BotFeedbackCard({
       <div className="mb-4 flex items-start gap-3">
         <LuMessageSquareHeart className="text-primary mt-1 size-5 shrink-0" />
         <div>
-          <h3 id={`${id}-title`} className="text-sm leading-6 font-semibold">
+          <h3 id={`${id}-title`} className="text-ui-title font-semibold">
             {waitingForSpecialist ? 'Пока вы ожидаете ответа специалиста, пожалуйста, оцените работу нашего бота' : 'Пожалуйста, оцените работу нашего бота'}
           </h3>
-          <p className="text-foreground/50 mt-1 text-sm">Это помогает нам сделать наш сервис лучше</p>
+          <p className="text-foreground/50 text-ui-body mt-1">Это помогает нам сделать наш сервис лучше</p>
         </div>
       </div>
       <form
@@ -58,12 +57,12 @@ export default function BotFeedbackCard({
         }}
       >
         <fieldset disabled={busy}>
-          <legend className="mb-3 text-sm font-medium">Оцените ответ</legend>
+          <legend className="text-ui-body mb-3 font-medium">Оцените ответ</legend>
           <div className="flex flex-wrap gap-2">
             {ratings.map((item) => (
               <label
                 key={item.value}
-                className={`has-focus-visible:ring-primary flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-focus-visible:ring-2 ${rating === item.value ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-surface-2'}`}
+                className={`has-focus-visible:ring-primary text-ui-body flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 has-focus-visible:ring-2 ${rating === item.value ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-surface-2'}`}
               >
                 <input
                   type="radio"
@@ -83,17 +82,17 @@ export default function BotFeedbackCard({
           </div>
           {rating && rating !== 'complete' && (
             <div className="mt-4 space-y-2">
-              <label htmlFor={`${id}-reason`} className="block text-sm font-medium">
+              <label htmlFor={`${id}-reason`} className="text-ui-body block font-medium">
                 Почему ответ не подошёл?
               </label>
               <Textarea id={`${id}-reason`} value={comment} onChange={(event) => setComment(event.target.value)} rows={3} maxLength={4000} placeholder="Расскажите, чего не хватило или что было не так…" aria-describedby={`${id}-optional`} />
-              <p id={`${id}-optional`} className="text-foreground/40 text-xs">
+              <p id={`${id}-optional`} className="text-foreground/40 text-ui-small">
                 Необязательно
               </p>
             </div>
           )}
           {error && (
-            <p role="alert" className="text-error mt-3 text-sm">
+            <p role="alert" className="text-error text-ui-body mt-3">
               Не удалось сохранить оценку. Попробуйте ещё раз.
             </p>
           )}
@@ -105,7 +104,6 @@ export default function BotFeedbackCard({
               Отправить оценку
             </Button>
           </div>
-          <p className="text-foreground/40 mt-3 text-xs">Деморежим: оценка сохраняется только в этом браузере.</p>
         </fieldset>
       </form>
     </section>

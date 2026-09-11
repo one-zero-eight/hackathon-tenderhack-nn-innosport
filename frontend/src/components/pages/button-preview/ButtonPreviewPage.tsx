@@ -4,7 +4,7 @@ export default function ButtonPreviewPage() {
   return (
     <div>
       <div className="grid grid-cols-5 items-center justify-center gap-2 p-2">
-        <h1>Primary</h1>
+        <h1 className="text-ui-title font-semibold">Primary</h1>
         <Button variant="primary" size="sm">
           Button
         </Button>
@@ -17,7 +17,7 @@ export default function ButtonPreviewPage() {
         <Button variant="primary" size="xl" color="warning">
           Button
         </Button>
-        <h1>Outline</h1>
+        <h1 className="text-ui-title font-semibold">Outline</h1>
         <Button variant="outline" size="sm" color="warning">
           Button
         </Button>
@@ -30,7 +30,7 @@ export default function ButtonPreviewPage() {
         <Button variant="outline" size="xl" color="error">
           Button
         </Button>
-        <h1>Ghost</h1>
+        <h1 className="text-ui-title font-semibold">Ghost</h1>
         <Button variant="ghost" size="sm">
           Button
         </Button>
@@ -43,7 +43,7 @@ export default function ButtonPreviewPage() {
         <Button variant="ghost" size="xl" color="success">
           Button
         </Button>
-        <h1>Disabled</h1>
+        <h1 className="text-ui-title font-semibold">Disabled</h1>
         <Button variant="ghost" size="sm" disabled>
           Button
         </Button>

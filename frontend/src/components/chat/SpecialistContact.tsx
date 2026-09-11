@@ -4,7 +4,7 @@ import Button from '@/components/ui/Button'
 export default function SpecialistContact({ busy, onContact }: { busy: boolean; onContact: () => Promise<boolean> }) {
   return (
     <div className="border-primary/15 bg-primary/5 mb-3 flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
-      <div className="text-foreground/65 flex items-center gap-2 text-sm">
+      <div className="text-foreground/65 text-ui-body flex items-center gap-2">
         <LuHeadset className="text-primary size-4" />
         Нужна дополнительная помощь?
       </div>

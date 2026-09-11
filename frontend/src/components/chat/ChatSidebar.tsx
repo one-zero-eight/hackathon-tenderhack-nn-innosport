@@ -28,7 +28,7 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
             Найти обращение
           </label>
           <LuSearch className="text-foreground/40 pointer-events-none absolute top-3 left-3 size-4" />
-          <Input id={searchId} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти обращение" className="border-transparent bg-transparent py-2.5 pl-9 text-sm" />
+          <Input id={searchId} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти обращение" className="border-transparent bg-transparent py-2.5 pl-9" />
         </div>
       </div>
       <nav aria-label="Список обращений" className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
@@ -37,7 +37,7 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
           return (
             items.length > 0 && (
               <section key={group}>
-                <h2 className="text-foreground/45 mb-2 px-3 text-xs font-medium">{group}</h2>
+                <h2 className="text-foreground/45 text-ui-small mb-2 px-3 font-medium">{group}</h2>
                 {items.map((chat) => (
                   <button
                     key={chat.id}
@@ -45,12 +45,12 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
                     aria-current={activeId === chat.id ? 'page' : undefined}
                     title={chat.title}
                     onClick={() => onSelect(chat.id)}
-                    className={`focus-visible:ring-primary flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left text-sm outline-none focus-visible:ring-2 ${activeId === chat.id ? 'bg-background font-medium shadow-sm' : 'text-foreground/65 hover:bg-background/70'}`}
+                    className={`focus-visible:ring-primary text-ui-body flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left outline-none focus-visible:ring-2 ${activeId === chat.id ? 'bg-background font-medium shadow-sm' : 'text-foreground/65 hover:bg-background/70'}`}
                   >
                     <LuMessageSquare className="text-foreground/40 size-4 shrink-0" />
                     <span className="min-w-0">
                       <span className="block truncate">{chat.title}</span>
-                      {chat.status === 'closed' && <span className="text-foreground/45 mt-1 block text-xs">Завершено</span>}
+                      {chat.status === 'closed' && <span className="text-foreground/45 text-ui-small mt-1 block">Завершено</span>}
                     </span>
                   </button>
                 ))}
@@ -58,10 +58,10 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
             )
           )
         })}
-        {!filtered.length && <p className="text-foreground/50 px-3 text-sm">Обращения не найдены</p>}
+        {!filtered.length && <p className="text-foreground/50 text-ui-body px-3">Обращения не найдены</p>}
       </nav>
       <div className="border-border mx-4 border-t py-5">
-        <p className="text-lg font-semibold tracking-tight">Техподдержка</p>
+        <p className="text-ui-title font-semibold tracking-tight">Техподдержка</p>
       </div>
     </div>
   )

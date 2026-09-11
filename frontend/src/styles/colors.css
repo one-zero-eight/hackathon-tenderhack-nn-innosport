@@ -1,4 +1,12 @@
 @theme {
+  /* Semantic typography */
+  --text-ui-small: 0.875rem;
+  --text-ui-small--line-height: 1.25rem;
+  --text-ui-body: 1rem;
+  --text-ui-body--line-height: 1.5rem;
+  --text-ui-title: 1.25rem;
+  --text-ui-title--line-height: 1.75rem;
+
   /* Base themed colors */
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);

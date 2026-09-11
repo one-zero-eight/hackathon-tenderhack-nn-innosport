@@ -8,7 +8,7 @@ export default function ChatStatusActions({ closed, busy, latestAction, onClose,
       <>
         {latestAction && <div className="mb-2 flex justify-center">{latestAction}</div>}
         <div className="border-border bg-surface-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
-          <p className="text-foreground/65 flex items-center gap-2 text-sm">
+          <p className="text-foreground/65 text-ui-body flex items-center gap-2">
             <LuCheck className="text-success size-4" />
             Обращение завершено
           </p>

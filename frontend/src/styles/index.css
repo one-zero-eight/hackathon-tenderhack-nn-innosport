@@ -3,3 +3,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @import './colors.css' layer(theme);
+
+@layer base {
+  body {
+    font-size: var(--text-ui-body);
+    line-height: var(--text-ui-body--line-height);
+  }
+}

@@ -2,9 +2,9 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import cva, { type VariantProps } from '@/lib/cva'
 import { cn } from '@/lib/cn'
 
-const buttonVariants = cva('font-semibold text-center rounded-lg cursor-pointer transition-colors duration-100 h-min w-min text-nowrap border select-none', {
+const buttonVariants = cva('text-ui-body font-semibold text-center rounded-lg cursor-pointer transition-colors duration-100 h-min w-min text-nowrap border select-none', {
   variants: {
-    size: { sm: 'text-sm px-3 py-1.5', md: 'text-sm px-4 py-2', lg: 'text-base px-6 py-3', xl: 'text-lg px-8 py-4' },
+    size: { sm: 'px-3 py-1.5', md: 'px-4 py-2', lg: 'px-6 py-3', xl: 'px-8 py-4' },
     variant: { primary: '', outline: 'bg-transparent', ghost: 'bg-transparent border-transparent', disabled: 'bg-secondary text-secondary-foreground border-secondary-foreground cursor-not-allowed' },
     color: { primary: 'primary', success: 'success', warning: 'warning', error: 'error' },
   },

@@ -5,7 +5,7 @@ import EditableCell from './editableCell'
 function Table({ totalSize, className, ...props }: ComponentProps<'table'> & { totalSize?: number }) {
   return (
     <div data-slot="table-container" className="relative overflow-x-auto" style={{ width: totalSize ? `${totalSize}px` : '100%' }}>
-      <table className={cn('caption-bottom text-sm', className)} {...props} />
+      <table className={cn('text-ui-body caption-bottom', className)} {...props} />
     </div>
   )
 }
@@ -45,7 +45,7 @@ function TableCell({ size, className, ...props }: ComponentProps<'td'> & { size?
 }
 
 function TableCaption({ className, ...props }: ComponentProps<'caption'>) {
-  return <caption className={cn('text-muted-foreground mt-4 text-sm', className)} {...props} />
+  return <caption className={cn('text-muted-foreground text-ui-body mt-4', className)} {...props} />
 }
 
 export { Table, TableHeader, TableBody, TableFooter, TableHead, TableResizer, TableRow, TableCell, TableCaption, EditableCell }

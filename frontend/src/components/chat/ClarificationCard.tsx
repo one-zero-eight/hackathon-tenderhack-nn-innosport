@@ -23,10 +23,10 @@ export default function ClarificationCard({
   const id = useId()
   if (answered || closed)
     return (
-      <section className="border-border bg-surface-2 mt-4 space-y-2 rounded-xl border px-4 py-3 text-sm">
-        <h3 className="text-foreground/50 text-xs font-medium">Уточнение</h3>
+      <section className="border-border bg-surface-2 text-ui-body mt-4 space-y-2 rounded-xl border px-4 py-3">
+        <h3 className="text-foreground/50 text-ui-small font-medium">Уточнение</h3>
         <p className="leading-relaxed break-words whitespace-pre-wrap">{request.question}</p>
-        <p className="text-foreground/60 flex items-center gap-2 text-xs">
+        <p className="text-foreground/60 text-ui-small flex items-center gap-2">
           {answered && <LuCheck className="text-success size-4" />}
           {answered ? 'Ответ получен' : 'Обращение закрыто. Откройте его, чтобы ответить на уточнение.'}
         </p>
@@ -42,15 +42,15 @@ export default function ClarificationCard({
       className="border-border bg-surface mt-4 overflow-hidden rounded-2xl border shadow-sm"
     >
       <div className="border-border bg-surface-2/60 border-b px-5 py-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <h3 className="text-ui-title flex items-center gap-2 font-semibold">
           <LuListFilter className="text-primary size-4" />
           Пожалуйста, уточните запрос
         </h3>
       </div>
       <fieldset disabled={busy} className="space-y-3 p-5">
         <legend className="sr-only">{request.question}</legend>
-        <p className="text-sm leading-relaxed">{request.question}</p>
-        <p className="text-foreground/45 text-xs">{request.multiple ? 'Можно выбрать несколько вариантов' : 'Выберите один вариант или напишите свой'}</p>
+        <p className="text-ui-body leading-relaxed">{request.question}</p>
+        <p className="text-foreground/45 text-ui-small">{request.multiple ? 'Можно выбрать несколько вариантов' : 'Выберите один вариант или напишите свой'}</p>
         <div className="space-y-2">
           {request.options.map((option) => (
             <label key={option.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${selected.includes(option.id) ? 'border-primary bg-primary/5' : 'border-border hover:bg-surface-2'}`}>
@@ -68,9 +68,9 @@ export default function ClarificationCard({
                 }}
                 className="accent-primary mt-0.5 size-4 shrink-0"
               />
-              <span className="text-sm">
+              <span className="text-ui-body">
                 {option.label}
-                {option.description && <span className="text-foreground/50 mt-1 block text-xs">{option.description}</span>}
+                {option.description && <span className="text-foreground/50 text-ui-small mt-1 block">{option.description}</span>}
               </span>
             </label>
           ))}
@@ -85,12 +85,12 @@ export default function ClarificationCard({
               }}
               className="accent-primary size-4"
             />
-            <span className="text-sm">Другое</span>
+            <span className="text-ui-body">Другое</span>
           </label>
         </div>
         {otherSelected && (
           <div className="space-y-2">
-            <label htmlFor={`${id}-other`} className="text-sm">
+            <label htmlFor={`${id}-other`} className="text-ui-body">
               Ваш вариант
             </label>
             <Textarea id={`${id}-other`} value={other} onChange={(event) => setOther(event.target.value)} placeholder="Введите своё уточнение…" rows={3} maxLength={4000} required autoFocus />
@@ -98,7 +98,7 @@ export default function ClarificationCard({
         )}
         <div className="flex justify-end pt-2">
           <Button type="submit" size="sm" disabled={busy || (otherSelected && !other.trim()) || (!selected.length && !otherSelected)} className="whitespace-normal">
-            {busy ? 'Отправляем…' : 'Отправить уточнение'}
+            {busy ? 'Отправляем…' : 'Отправить'}
           </Button>
         </div>
       </fieldset>

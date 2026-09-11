@@ -64,8 +64,8 @@ export default function ChatOutline({ messages, activeId, onNavigate }: { messag
           style={{ top: preview.top }}
           className="border-border bg-surface-2 pointer-events-none fixed right-20 max-h-[min(8rem,calc(100dvh-2rem))] w-80 max-w-[calc(100vw-6rem)] overflow-hidden rounded-xl border px-4 py-3 text-left shadow-xl"
         >
-          <p className="truncate text-sm font-medium">{visibleQuestion.message.content}</p>
-          {visibleQuestion.response && <p className="text-foreground/45 mt-1 line-clamp-2 text-xs leading-5">{visibleQuestion.response.content}</p>}
+          <p className="text-ui-body truncate font-medium">{visibleQuestion.message.content}</p>
+          {visibleQuestion.response && <p className="text-foreground/45 text-ui-small mt-1 line-clamp-2">{visibleQuestion.response.content}</p>}
         </div>
       )}
     </nav>

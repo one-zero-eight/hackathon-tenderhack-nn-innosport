@@ -29,7 +29,7 @@ export default function ChatComposer({ draft, onDraft, onSend, busy, awaitingCla
         disabled={disabled}
         rows={2}
         maxLength={10000}
-        className="min-h-16 border-0 bg-transparent px-3 py-2 text-base focus-visible:ring-0"
+        className="text-ui-body min-h-16 border-0 bg-transparent px-3 py-2 focus-visible:ring-0"
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault()
@@ -38,7 +38,7 @@ export default function ChatComposer({ draft, onDraft, onSend, busy, awaitingCla
         }}
       />
       <div className="flex items-center justify-between gap-2 px-2 pb-1">
-        <span className="text-foreground/40 text-xs">{awaitingClarification ? 'Выберите вариант в карточке уточнения' : 'Enter — отправить · Shift + Enter — новая строка'}</span>
+        <span className="text-foreground/40 text-ui-small">{awaitingClarification ? 'Выберите вариант в карточке уточнения' : 'Enter — отправить · Shift + Enter — новая строка'}</span>
         <Button type="submit" aria-label="Отправить сообщение" disabled={disabled || !draft.trim()} className="grid size-9 shrink-0 place-items-center rounded-xl p-0">
           {busy ? <LuLoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> : <LuArrowUp className="size-5" />}
         </Button>
