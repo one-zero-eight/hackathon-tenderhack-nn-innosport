@@ -48,7 +48,10 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
                     className={`focus-visible:ring-primary flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left text-sm outline-none focus-visible:ring-2 ${activeId === chat.id ? 'bg-background font-medium shadow-sm' : 'text-foreground/65 hover:bg-background/70'}`}
                   >
                     <LuMessageSquare className="text-foreground/40 size-4 shrink-0" />
-                    <span className="truncate">{chat.title}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate">{chat.title}</span>
+                      {chat.status === 'closed' && <span className="text-foreground/45 mt-1 block text-xs">Завершено</span>}
+                    </span>
                   </button>
                 ))}
               </section>

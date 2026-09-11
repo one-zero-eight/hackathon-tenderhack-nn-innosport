@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { demoTransport } from './demo-transport.ts'
-import { applyExchange, CHAT_STORAGE_KEY, CHAT_STORAGE_VERSION, clarificationCount, createChat, formatClarificationAnswer, isChatReply, parseChatHistory, pendingClarification, serializeChatHistory } from './model.ts'
+import { applyExchange, applySpecialistHandoff, canContactSpecialist, canFeedback, CHAT_STORAGE_KEY, CHAT_STORAGE_VERSION, clarificationCount, closeChat as closeChatModel, createChat, dismissFeedback as dismissFeedbackModel, formatClarificationAnswer, isChatReply, isSpecialistResponse, parseChatHistory, pendingClarification, reopenChat as reopenChatModel, serializeChatHistory, submitFeedback as submitFeedbackModel } from './model.ts'
 import type { ChatHistory } from './model.ts'
-import type { Chat, ChatMessage, ChatTransport, ClarificationAnswer, ClarificationRequest } from './types.ts'
+import type { Chat, ChatMessage, ChatTransport, ClarificationAnswer, ClarificationRequest, FeedbackRating } from './types.ts'
 
 let fallbackId = 0
 function newId(): string {
@@ -31,6 +31,12 @@ export interface UseChatResult {
   selectChat: (id: string) => void
   send: (text: string) => Promise<boolean>
   answer: (request: ClarificationRequest, answer: ClarificationAnswer) => Promise<boolean>
+  closeChat: () => void
+  reopenChat: () => void
+  contactSpecialist: () => Promise<boolean>
+  submitFeedback: (rating: FeedbackRating, comment: string) => boolean
+  dismissFeedback: () => void
+  canFeedback: boolean
   busy: boolean
   error: string | null
   clarificationCount: number
@@ -101,7 +107,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
       // This synchronous ref lock catches same-tick double clicks before React renders.
       if (operations.current.has(chatId)) return false
       const chat = historyRef.current.chats.find((item) => item.id === chatId)
-      if (!chat || !content.trim()) return false
+      if (!chat || chat.status !== 'open' || !content.trim()) return false
       const controller = new AbortController()
       operations.current.set(chatId, controller)
       setBusyChats((current) => ({ ...current, [chatId]: true }))
@@ -153,7 +159,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     async (text: string): Promise<boolean> => {
       const current = historyRef.current
       const chat = current.chats.find((item) => item.id === current.activeChatId)
-      if (!chat || operations.current.has(chat.id)) return false
+      if (!chat || chat.status !== 'open' || operations.current.has(chat.id)) return false
       if (pendingClarification(chat)) {
         setErrors((errors) => ({ ...errors, [chat.id]: 'Сначала ответьте на уточняющий вопрос.' }))
         return false
@@ -167,7 +173,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     async (request: ClarificationRequest, value: ClarificationAnswer): Promise<boolean> => {
       const current = historyRef.current
       const chat = current.chats.find((item) => item.id === current.activeChatId)
-      if (!chat || operations.current.has(chat.id)) return false
+      if (!chat || chat.status !== 'open' || operations.current.has(chat.id)) return false
       const pending = pendingClarification(chat)
       if (!pending || pending.id !== request.id) return false
       // Use the canonical request from history instead of caller-provided labels/options.
@@ -181,6 +187,71 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     [submit],
   )
 
+  // Ref-backed synchronous updates make lifecycle actions same-tick idempotent.
+  const updateActiveChat = useCallback((update: (chat: Chat) => Chat): boolean => {
+    const current = historyRef.current
+    const chat = current.chats.find((item) => item.id === current.activeChatId)
+    if (!chat || operations.current.has(chat.id)) return false
+    const next = update(chat)
+    if (next === chat) return false
+    commitHistory({ ...current, chats: current.chats.map((item) => item.id === chat.id ? next : item) })
+    setErrors((errors) => ({ ...errors, [chat.id]: null }))
+    return true
+  }, [commitHistory])
+
+  const closeChat = useCallback((): void => {
+    updateActiveChat((chat) => closeChatModel(chat, newId(), new Date().toISOString()))
+  }, [updateActiveChat])
+
+  const reopenChat = useCallback((): void => {
+    updateActiveChat((chat) => reopenChatModel(chat, newId(), new Date().toISOString()))
+  }, [updateActiveChat])
+
+  const submitFeedback = useCallback((rating: FeedbackRating, comment: string): boolean => {
+    // This is a local history update, not an API request.
+    return updateActiveChat((chat) => submitFeedbackModel(chat, rating, comment, new Date().toISOString()))
+  }, [updateActiveChat])
+
+  const dismissFeedback = useCallback((): void => {
+    updateActiveChat(dismissFeedbackModel)
+  }, [updateActiveChat])
+
+  const contactSpecialist = useCallback(async (): Promise<boolean> => {
+    const current = historyRef.current
+    const chat = current.chats.find((item) => item.id === current.activeChatId)
+    if (!chat || operations.current.has(chat.id) || !canContactSpecialist(chat)) return false
+    if (!transport.requestSpecialist) {
+      setErrors((errors) => ({ ...errors, [chat.id]: 'Связь со специалистом недоступна: сервис не подключён.' }))
+      return false
+    }
+    const controller = new AbortController()
+    operations.current.set(chat.id, controller)
+    setBusyChats((busy) => ({ ...busy, [chat.id]: true }))
+    setErrors((errors) => ({ ...errors, [chat.id]: null }))
+    try {
+      const response = await transport.requestSpecialist(chat, controller.signal)
+      if (!mounted.current || controller.signal.aborted) return false
+      if (!isSpecialistResponse(response)) throw new Error('Invalid specialist response')
+      const latest = historyRef.current
+      const target = latest.chats.find((item) => item.id === chat.id)
+      if (!target) return false
+      const next = applySpecialistHandoff(target, response, newId(), new Date().toISOString())
+      if (next === target) return false
+      commitHistory({ ...latest, chats: latest.chats.map((item) => item.id === chat.id ? next : item) })
+      return true
+    } catch {
+      if (mounted.current && !controller.signal.aborted) {
+        setErrors((errors) => ({ ...errors, [chat.id]: 'Не удалось связаться со специалистом. Попробуйте ещё раз.' }))
+      }
+      return false
+    } finally {
+      if (operations.current.get(chat.id) === controller) {
+        operations.current.delete(chat.id)
+        if (mounted.current) setBusyChats((busy) => ({ ...busy, [chat.id]: false }))
+      }
+    }
+  }, [commitHistory, transport])
+
   const activeChat = history.chats.find((chat) => chat.id === history.activeChatId) ?? history.chats[0]
   return {
     chats: history.chats,
@@ -193,6 +264,12 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     selectChat,
     send,
     answer,
+    closeChat,
+    reopenChat,
+    contactSpecialist,
+    submitFeedback,
+    dismissFeedback,
+    canFeedback: canFeedback(activeChat),
     busy: busyChats[activeChat.id] ?? false,
     error: errors[activeChat.id] ?? null,
     clarificationCount: clarificationCount(activeChat),

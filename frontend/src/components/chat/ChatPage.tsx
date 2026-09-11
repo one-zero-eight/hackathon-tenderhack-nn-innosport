@@ -8,6 +8,8 @@ import ChatOutline from './ChatOutline'
 import ChatComposer from './ChatComposer'
 import ClarificationCard from './ClarificationCard'
 import SpecialistContact from './SpecialistContact'
+import BotFeedbackCard from './BotFeedbackCard'
+import ChatStatusActions from './ChatStatusActions'
 
 export default function ChatPage() {
   const chat = useChat()
@@ -18,6 +20,7 @@ export default function ChatPage() {
   const stickToBottom = useRef(true)
   const previousChat = useRef(chat.activeChatId)
   const messages = chat.activeChat.messages
+  const closed = chat.activeChat.status === 'closed'
 
   useEffect(() => {
     const container = scrollRef.current
@@ -115,17 +118,23 @@ export default function ChatPage() {
                               <LuSparkles className="size-3" />
                             </span>
                           )}
-                          <span>{message.role === 'user' ? 'Вы' : 'Ассистент'}</span>
+                          <span>{message.role === 'user' ? 'Вы' : message.kind === 'notice' ? 'Статус обращения' : 'Ассистент'}</span>
                           {message.clarificationId && <span className="bg-primary/5 text-primary rounded px-1.5 py-0.5 text-[10px]">Уточнение</span>}
                           <time dateTime={message.createdAt} className="text-[10px]">
                             {new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                           </time>
                         </div>
                         <div className={`text-sm leading-7 break-words whitespace-pre-wrap ${message.role === 'user' ? 'bg-surface-2 rounded-2xl rounded-tr-md px-5 py-3' : 'text-foreground/85'}`}>{message.content}</div>
-                        {message.clarification && <ClarificationCard request={message.clarification} answered={messages.some((item) => item.clarificationId === message.clarification?.id)} busy={chat.busy} onAnswer={chat.answer} />}
+                        {message.kind === 'handoff' && chat.activeChat.handoff?.simulated && <p className="text-foreground/45 mt-2 text-xs">Демонстрация: реальная заявка не отправлена, связь со специалистом не установлена.</p>}
+                        {message.clarification && (
+                          <ClarificationCard request={message.clarification} answered={messages.some((item) => item.clarificationId === message.clarification?.id)} busy={chat.busy} closed={closed} onAnswer={chat.answer} />
+                        )}
                       </article>
                     ))}
                   </div>
+                )}
+                {(chat.canFeedback || chat.activeChat.feedback) && (
+                  <BotFeedbackCard key={chat.activeChatId} feedback={chat.activeChat.feedback} waitingForSpecialist={!!chat.activeChat.handoff && !closed} busy={chat.busy} onSubmit={chat.submitFeedback} onDismiss={chat.dismissFeedback} />
                 )}
                 {chat.busy && (
                   <div role="status" className="text-foreground/50 mt-6 flex items-center gap-2 text-sm">
@@ -155,11 +164,17 @@ export default function ChatPage() {
                 )}
                 {chat.error && (
                   <p role="alert" className="border-error/20 bg-error/5 text-error mb-3 rounded-xl border p-3 text-sm">
-                    {chat.error} Попробуйте отправить ещё раз — ваш ввод сохранён.
+                    {chat.error}
                   </p>
                 )}
-                {chat.clarificationCount >= 3 && <SpecialistContact key={chat.activeChatId} />}
-                <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} awaitingClarification={!!chat.pendingClarification} />
+                {chat.activeChat.handoff && (
+                  <p role="status" className="text-primary mb-3 text-center text-sm">
+                    {closed ? (chat.activeChat.handoff.simulated ? 'Демонстрационная передача специалисту сохранена' : 'Обращение было передано специалисту') : chat.activeChat.handoff.simulated ? 'Деморежим: ожидаем специалиста' : 'Ожидаем специалиста'}
+                  </p>
+                )}
+                {!closed && !chat.activeChat.handoff && chat.clarificationCount >= 3 && <SpecialistContact busy={chat.busy} onContact={chat.contactSpecialist} />}
+                <ChatStatusActions closed={closed} busy={chat.busy} onClose={chat.closeChat} onReopen={chat.reopenChat} />
+                {!closed && <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} awaitingClarification={!!chat.pendingClarification} />}
               </div>
             </div>
           </main>

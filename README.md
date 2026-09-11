@@ -41,8 +41,18 @@ clarification form, message navigation, and a specialist contact action after
 three successfully submitted clarification replies in the current chat.
 
 **The current application uses a clearly labelled local demo, not an LLM.** The
-scripted transport asks three clarification questions. The contact dialog explains
-that no request is sent. No backend endpoints have been added or assumed.
+scripted transport asks three clarification questions and gives a sample answer.
+Specialist handoff is simulated and labelled as such next to its confirmation;
+no real specialist request is sent. No backend endpoints have been added or assumed.
+
+Clarification questions remain visible after they are answered. An appeal can be
+closed and reopened without losing history. Closed appeals reject new messages
+and clarification replies. Specialist handoff and closing prompt for feedback
+only when there is an explicitly typed substantive answer (`kind: 'answer'`), not
+just clarification or routing messages. Negative ratings optionally include a
+reason; one rating is stored per appeal and is not re-requested on reopening.
+Feedback is local-only, including for closed appeals. Closing does not cancel an
+existing specialist handoff.
 
 - UI: `frontend/src/components/chat/`
 - Typed frontend transport boundary: `frontend/src/features/chat/types.ts`
@@ -51,7 +61,9 @@ that no request is sent. No backend endpoints have been added or assumed.
 
 Chat history is saved under `innosport.chat.v1` in browser localStorage. Do not
 enter sensitive data; clearing this key removes saved chats. Drafts stay in memory
-per chat. Storage failures fall back to in-memory operation.
+per chat. Storage failures fall back to in-memory operation. The stored payload
+is now version 2; valid version 1 conversations are migrated in place as open
+appeals. Legacy untyped bot messages are not assumed to be substantive answers.
 
 To integrate a real service, implement `ChatTransport` and pass it to `useChat`.
 Use the `$api` convention below, and map structured clarification data rather than
