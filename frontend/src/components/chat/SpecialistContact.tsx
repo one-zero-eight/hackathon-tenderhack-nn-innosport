@@ -8,7 +8,7 @@ export default function SpecialistContact({ busy, onContact }: { busy: boolean; 
         <LuHeadset className="text-primary size-4" />
         Нужна дополнительная помощь?
       </div>
-      <Button variant="outline" size="sm" className="flex w-40 items-center justify-center gap-2" disabled={busy} onClick={() => void onContact()}>
+      <Button variant="outline" size="sm" className="flex w-48 shrink-0 items-center justify-center gap-2 sm:w-56" disabled={busy} onClick={() => void onContact()}>
         {busy && <LuLoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />}
         {busy ? 'Отправляем…' : 'Связаться'}
       </Button>

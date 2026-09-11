@@ -12,8 +12,8 @@ export default function ChatStatusActions({ closed, busy, latestAction, onClose,
             <LuCheck className="text-success size-4" />
             Обращение завершено
           </p>
-          <Button variant="outline" size="sm" className="flex items-center gap-2 whitespace-normal" disabled={busy} onClick={onReopen}>
-            <LuRotateCcw className="size-4" />
+          <Button variant="outline" size="sm" className="flex w-56 items-center justify-center gap-2" disabled={busy} onClick={onReopen}>
+            <LuRotateCcw className="size-4 shrink-0" />
             Открыть обращение
           </Button>
         </div>
@@ -22,7 +22,7 @@ export default function ChatStatusActions({ closed, busy, latestAction, onClose,
   return (
     <div className="mb-2 grid min-h-8 grid-cols-[auto_1fr] items-center gap-2 pr-4 sm:grid-cols-[1fr_auto_1fr]">
       {latestAction && <div className="col-start-1 sm:col-start-2 sm:row-start-1">{latestAction}</div>}
-      <Button variant="ghost" size="sm" className="text-foreground/55 col-start-2 flex w-40 justify-center justify-self-end sm:col-start-3 sm:row-start-1" disabled={busy} onClick={onClose}>
+      <Button variant="ghost" size="sm" className="text-foreground/55 col-start-2 flex w-44 justify-center justify-self-end sm:col-start-3 sm:row-start-1 sm:w-56" disabled={busy} onClick={onClose}>
         Закрыть обращение
       </Button>
     </div>
