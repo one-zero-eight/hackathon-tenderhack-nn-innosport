@@ -12,7 +12,7 @@ export interface ChatHistory {
 
 /** Identity and time are supplied by the caller to keep model operations pure. */
 export function createChat(id: string, now: string): Chat {
-  return { id, title: 'Новый чат', updatedAt: now, messages: [] }
+  return { id, title: 'Новое обращение', updatedAt: now, messages: [] }
 }
 
 /** Only committed user messages count; repeated answers never inflate the count. */
@@ -132,7 +132,8 @@ export function parseChatHistory(raw: string | null): ChatHistory | null {
     ) {
       return null
     }
-    return { version: CHAT_STORAGE_VERSION, chats: value.chats, activeChatId: value.activeChatId }
+    const chats = value.chats.map((chat) => (chat.title === 'Новый чат' ? { ...chat, title: 'Новое обращение' } : chat))
+    return { version: CHAT_STORAGE_VERSION, chats, activeChatId: value.activeChatId }
   } catch {
     return null
   }

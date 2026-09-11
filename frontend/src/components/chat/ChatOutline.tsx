@@ -1,30 +1,44 @@
 import type { ChatMessage } from '@/features/chat/types'
 
 export default function ChatOutline({ messages, activeId, onNavigate }: { messages: ChatMessage[]; activeId: string; onNavigate: (id: string) => void }) {
-  const questions = messages.filter((message) => message.role === 'user')
+  const questions = messages.flatMap((message, index) => {
+    if (message.role !== 'user') return []
+    const response = messages.slice(index + 1).find((item) => item.role === 'assistant')
+    return [{ message, response }]
+  })
+
+  if (!questions.length) return null
+
   return (
-    <nav aria-label="Навигация по диалогу" className="h-full overflow-y-auto px-5 py-7">
-      <h2 className="text-foreground/60 mb-1 text-xs font-semibold tracking-wider uppercase">По диалогу</h2>
-      <p className="text-foreground/35 mb-7 text-xs">Ваши вопросы и уточнения</p>
-      {!questions.length && <p className="text-foreground/40 text-sm leading-relaxed">Здесь появятся ваши вопросы</p>}
-      <ol className="space-y-1">
-        {questions.map((message, index) => (
-          <li key={message.id}>
-            <button
-              type="button"
-              onClick={() => onNavigate(message.id)}
-              aria-current={activeId === message.id ? 'location' : undefined}
-              title={message.content}
-              className={`focus-visible:ring-primary flex w-full cursor-pointer gap-3 border-l-2 px-3 py-3 text-left text-xs leading-relaxed transition-colors outline-none focus-visible:ring-2 ${activeId === message.id ? 'border-primary bg-primary/5 text-primary' : 'border-border text-foreground/45 hover:border-primary/40 hover:text-foreground'}`}
-            >
-              <span className="shrink-0 tabular-nums opacity-50">{String(index + 1).padStart(2, '0')}</span>
-              <span className="min-w-0">
-                <span className="line-clamp-2 break-words">{message.content}</span>
-                {message.clarificationId && <span className="mt-1 block text-[10px] opacity-60">Уточнение</span>}
-              </span>
-            </button>
-          </li>
-        ))}
+    <nav aria-label="Навигация по обращению" className="absolute top-5 right-4 z-20">
+      <ol className="flex flex-col items-end">
+        {questions.map(({ message, response }, index) => {
+          const active = activeId === message.id
+          return (
+            <li key={message.id} className="group/item relative flex h-4 w-10 items-center justify-end">
+              <div
+                role="tooltip"
+                className="border-border bg-surface-2 pointer-events-none invisible absolute top-1/2 right-full mr-3 w-80 max-w-[calc(100vw-5rem)] -translate-y-1/2 rounded-xl border px-4 py-3 text-left opacity-0 shadow-xl transition-[opacity,transform,visibility] duration-150 group-hover/item:visible group-hover/item:-translate-x-1 group-hover/item:opacity-100 group-focus-within/item:visible group-focus-within/item:-translate-x-1 group-focus-within/item:opacity-100"
+              >
+                <p className="truncate text-sm font-medium">{message.content}</p>
+                {response && <p className="text-foreground/45 mt-1 line-clamp-2 text-xs leading-5">{response.content}</p>}
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate(message.id)}
+                aria-label={`Перейти к вопросу ${index + 1}: ${message.content}`}
+                aria-current={active ? 'location' : undefined}
+                className="focus-visible:ring-primary flex h-full w-full cursor-pointer items-center justify-end rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              >
+                <span
+                  className={`block h-0.5 rounded-full transition-[width,background-color] duration-150 ${
+                    active ? 'bg-foreground w-7' : 'bg-foreground/35 w-3 group-hover/item:w-5 group-hover/item:bg-foreground/65 group-focus-within/item:w-5 group-focus-within/item:bg-foreground/65'
+                  }`}
+                />
+              </button>
+            </li>
+          )
+        })}
       </ol>
     </nav>
   )

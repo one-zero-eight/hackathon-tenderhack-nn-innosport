@@ -2,7 +2,6 @@ import { useId, useState } from 'react'
 import { LuMessageSquare, LuPlus, LuSearch, LuSparkles } from 'react-icons/lu'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/input'
-import ThemeToggle from '@/components/ui/ThemeToggle'
 import type { Chat } from '@/features/chat/types'
 
 function groupLabel(date: string) {
@@ -30,17 +29,17 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
         </div>
         <Button onClick={onCreate} variant="outline" className="bg-background flex w-full items-center justify-center gap-2 rounded-xl py-3">
           <LuPlus className="size-4" />
-          Новый чат
+          Новое обращение
         </Button>
         <div className="relative">
           <label htmlFor={searchId} className="sr-only">
-            Поиск по чатам
+            Найти обращение
           </label>
           <LuSearch className="text-foreground/40 pointer-events-none absolute top-3 left-3 size-4" />
-          <Input id={searchId} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск по чатам" className="border-transparent bg-transparent py-2.5 pl-9 text-sm" />
+          <Input id={searchId} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти обращение" className="border-transparent bg-transparent py-2.5 pl-9 text-sm" />
         </div>
       </div>
-      <nav aria-label="Список чатов" className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
+      <nav aria-label="Список обращений" className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
         {['Сегодня', 'Вчера', 'Ранее'].map((group) => {
           const items = filtered.filter((chat) => groupLabel(chat.updatedAt) === group)
           return (
@@ -64,14 +63,10 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
             )
           )
         })}
-        {!filtered.length && <p className="text-foreground/50 px-3 text-sm">Чаты не найдены</p>}
+        {!filtered.length && <p className="text-foreground/50 px-3 text-sm">Обращения не найдены</p>}
       </nav>
-      <div className="border-border mx-4 flex items-center justify-between gap-2 border-t py-4">
-        <div>
-          <p className="text-sm font-medium">Ваше пространство</p>
-          <p className="text-foreground/45 mt-0.5 text-xs">История на этом устройстве</p>
-        </div>
-        <ThemeToggle />
+      <div className="border-border mx-4 border-t py-5">
+        <p className="text-lg font-semibold tracking-tight">Техподдержка</p>
       </div>
     </div>
   )

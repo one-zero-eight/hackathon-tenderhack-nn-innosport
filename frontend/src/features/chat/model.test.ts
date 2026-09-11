@@ -22,7 +22,7 @@ function user(id: string, clarificationId?: string): ChatMessage {
 test('createChat is deterministic and has no messages', () => {
   assert.deepEqual(createChat('chat-1', now), {
     id: 'chat-1',
-    title: 'Новый чат',
+    title: 'Новое обращение',
     updatedAt: now,
     messages: [],
   })
@@ -104,6 +104,12 @@ test('history round-trips the active chat and committed clarification messages',
   assert.equal(history?.activeChatId, next.id)
   assert.equal(clarificationCount(history!.chats[0]), 1)
   assert.equal(pendingClarification(history!.chats[0]), undefined)
+})
+
+test('history updates the previous default title without discarding an appeal', () => {
+  const chat = { ...createChat('chat', now), title: 'Новый чат' }
+  const history = parseChatHistory(serializeChatHistory([chat], chat.id))
+  assert.equal(history?.chats[0].title, 'Новое обращение')
 })
 
 test('history rejects corrupt, incompatible, and malformed data', () => {

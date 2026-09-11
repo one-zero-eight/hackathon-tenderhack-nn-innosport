@@ -13,7 +13,7 @@ export default function SpecialistContact() {
           Нужна дополнительная помощь?
         </div>
         <Button variant="outline" size="sm" className="whitespace-normal" onClick={() => setOpen(true)}>
-          Связаться со специалистом
+          Связаться
         </Button>
       </div>
       <Dialog open={open} onClose={() => setOpen(false)} className="relative z-50">
@@ -23,10 +23,10 @@ export default function SpecialistContact() {
             <LuHeadset className="text-primary mb-4 size-8" />
             <DialogTitle className="text-lg font-semibold">Связаться со специалистом</DialogTitle>
             <Description className="text-foreground/65 mt-3 text-sm leading-relaxed">
-              В деморежиме связь со специалистом недоступна. Заявка не отправлена. После подключения сервиса здесь можно будет передать обращение специалисту.
+              Связь со специалистом пока недоступна. Заявка не отправлена. После подключения сервиса здесь можно будет передать обращение специалисту.
             </Description>
             <Button className="mt-6" onClick={() => setOpen(false)}>
-              Вернуться к диалогу
+              Вернуться к обращению
             </Button>
           </DialogPanel>
         </div>
