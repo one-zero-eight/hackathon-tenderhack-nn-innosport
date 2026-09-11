@@ -1,12 +1,9 @@
 {
-  "name": "frontend-template",
+  "name": "innosport-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "packageManager": "pnpm@10.22.0",
-  "imports": {
-    "#index.css": "./src/styles/index.css"
-  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -16,10 +13,7 @@
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
-    "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-query": "^5.90.9",
-    "@tanstack/react-router": "^1.136.6",
-    "@tanstack/react-router-devtools": "^1.136.6",
     "@tanstack/react-table": "^8.21.3",
     "clsx": "^2.1.1",
     "openapi-fetch": "^0.15.0",
@@ -27,12 +21,11 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-icons": "^5.5.0",
-    "tailwind-merge": "^3.4.0",
-    "tailwindcss": "^4.1.17"
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@tanstack/router-plugin": "^1.136.6",
+    "@tailwindcss/vite": "^4.1.17",
     "@types/node": "^24.10.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
@@ -43,6 +36,7 @@
     "globals": "^16.5.0",
     "prettier": "3.6.2",
     "prettier-plugin-tailwindcss": "^0.7.1",
+    "tailwindcss": "^4.1.17",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.3",
     "vite": "^7.2.2"

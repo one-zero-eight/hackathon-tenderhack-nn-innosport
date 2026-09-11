@@ -2,35 +2,51 @@
 
 > by InNoHassle
 
-InnoSport is built with React, TypeScript, and TanStack Start.
+InnoSport is built with React, TypeScript, Tailwind CSS, and Vite.
 
 ## Stack
 
 - React 19
 - TypeScript
-- TanStack Start
-- TanStack Router
+- Tailwind CSS 4
 - Vite
 - pnpm
 
 ## Getting started
 
 ```bash
+cd frontend
 pnpm install
 pnpm dev
 ```
 
-The development server runs at `http://localhost:3000`.
+The development server uses Vite's default address at `http://localhost:5173`.
 
 ## Production build
 
 ```bash
+cd frontend
 pnpm build
 pnpm preview
 ```
 
-Routes live in `src/routes`. TanStack Router generates `src/routeTree.gen.ts`
-automatically when the development server or production build runs.
+The application entry point is `frontend/src/app/main.tsx`, and reusable
+components live under `frontend/src/components`.
+
+## API query convention
+
+Name the typed React Query client `$api` at every call site. Use the existing
+wrapper in `frontend/src/api/create-query-client.ts` through these interfaces:
+
+```ts
+$api.useQuery(method, path, init, options)
+$api.useMutation(method, path, options)
+$api.queryOptions(method, path, init, options)
+```
+
+Use lowercase HTTP methods and pass request parameters through the typed
+OpenAPI `init` object. The API base URL and endpoint schema will be configured
+when the backend specification is available.
 
 ## Team
 
