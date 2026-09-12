@@ -1,4 +1,4 @@
-import type { SchemaCitation, SchemaDialogListItem, SchemaDialogResponse, SchemaDialogView, SchemaTopicRef } from '../../api/types.ts'
+import type { SchemaCitation, SchemaDialogListItem, SchemaDialogResponse, SchemaDialogView } from '../../api/types.ts'
 import { createChat, type ChatHistory } from './model.ts'
 import type { Chat, ChatMessage, ChatReply, SpecialistResponse } from './types.ts'
 
@@ -28,24 +28,14 @@ function formatCitations(citations: SchemaCitation[]): string {
 }
 
 export function mapDialogResponse(data: SchemaDialogResponse): ChatReply {
-  const options = data.clarification_options ?? []
   const citations = data.citations ?? []
   const closed = Boolean(data.closed)
-  const clarification =
-    data.status === 'clarifying' && options.length > 0
-      ? {
-          id: `clarify:${data.id}:${options.map((option) => option.id).join(',')}`,
-          question: data.reply,
-          options: options.map((option: SchemaTopicRef) => ({ id: option.id, label: option.title })),
-        }
-      : undefined
   return {
     dialogId: data.id,
     content: `${data.reply}${data.status === 'answered' ? formatCitations(citations) : ''}`,
-    kind: clarification ? 'clarification' : data.status === 'answered' ? 'answer' : 'notice',
+    kind: data.status === 'answered' ? 'answer' : 'notice',
     closed,
     offerSpecialist: data.status === 'escalate' && !closed,
-    ...(clarification ? { clarification } : {}),
   }
 }
 
@@ -104,7 +94,7 @@ export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): C
 export function chatFromDialogView(view: SchemaDialogView, existing?: Chat): Chat {
   const updatedAt = toTimestamp(view.updated_at, existing?.updatedAt)
   const keepLocalMessages = Boolean(existing?.messages.length)
-  const title = keepLocalMessages ? existing!.title : view.topic?.title || firstUserTitle(view.messages) || existing?.title || 'Новое обращение'
+  const title = keepLocalMessages ? existing!.title : firstUserTitle(view.messages) || existing?.title || 'Новое обращение'
   const preview = keepLocalMessages
     ? existing?.preview
     : [...(view.messages ?? [])].reverse().find((message) => message.role === 'user')?.content.trim().replace(/\s+/g, ' ').slice(0, 80)
@@ -115,7 +105,6 @@ export function chatFromDialogView(view: SchemaDialogView, existing?: Chat): Cha
       title,
       preview: preview ?? existing?.preview ?? '',
       status: view.status,
-      topic: view.topic,
       line: view.line,
       closed: Boolean(view.closed),
       reason: view.reason,
@@ -139,7 +128,6 @@ function mapViewMessages(view: SchemaDialogView, existing?: Chat): ChatMessage[]
       content: isLastAssistant ? lastReply.content : message.content,
       createdAt: previous?.createdAt ?? toTimestamp(view.updated_at),
       ...(role === 'assistant' ? { kind: isLastAssistant ? lastReply.kind : 'notice' } : {}),
-      ...(isLastAssistant && lastReply.clarification ? { clarification: lastReply.clarification } : {}),
     }
   })
 }

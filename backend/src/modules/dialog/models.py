@@ -16,7 +16,6 @@ class Topic(BaseSchema):
 
 class Chunk(BaseSchema):
     id: str
-    topic_id: str
     text: str
     document: str
     section: str

@@ -8,7 +8,7 @@ from memvid_sdk import MemvidError, use
 from memvid_sdk.embeddings import EmbeddingProvider
 
 from src.logging_ import logger
-from src.modules.dialog.models import Chunk, Topic
+from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import ABBREVIATIONS, significant_stems
 
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
@@ -16,7 +16,6 @@ SOURCE_RE = re.compile(r'\bsource:\s*"([^"]+)"', re.IGNORECASE)
 SECTION_RE = re.compile(r'\bsection:\s*"([^"]+)"', re.IGNORECASE)
 SECTION_TITLE_RE = re.compile(r'\bsection_title:\s*"([^"]+)"', re.IGNORECASE)
 PATH_RE = re.compile(r'\bpath:\s*"([^"]+)"', re.IGNORECASE)
-TOPIC_ID_RE = re.compile(r'\btopic_id:\s*"([^"]+)"', re.IGNORECASE)
 SERIALIZED_METADATA_RE = re.compile(
     r"\s+title:\s.*?(?=\s+(?:labels?|path|section|section_title|source|topic_id):)",
     re.IGNORECASE,
@@ -111,7 +110,7 @@ def score_chunk(query: str, chunk: Chunk) -> float:
 
 
 class KnowledgeRetriever(Protocol):
-    async def find(self, query: str, topic: Topic, limit: int = 3) -> list[Chunk]: ...
+    async def find(self, query: str, limit: int = 3) -> list[Chunk]: ...
 
 
 class MemoryKnowledgeRetriever:
@@ -120,8 +119,8 @@ class MemoryKnowledgeRetriever:
     def __init__(self, chunks: list[Chunk]) -> None:
         self.chunks = chunks
 
-    async def find(self, query: str, topic: Topic, limit: int = 3) -> list[Chunk]:
-        ranked = [(score_chunk(query, chunk), chunk) for chunk in self.chunks if chunk.topic_id == topic.id]
+    async def find(self, query: str, limit: int = 3) -> list[Chunk]:
+        ranked = [(score_chunk(query, chunk), chunk) for chunk in self.chunks]
         ranked = [item for item in ranked if item[0] >= MIN_RETRIEVAL_SCORE]
         ranked.sort(key=lambda item: item[0], reverse=True)
         return [chunk for _score, chunk in ranked[:limit]]
@@ -141,17 +140,17 @@ class MemvidKnowledgeRetriever:
         self.memory = use("basic", str(path), read_only=True, enable_lex=False, enable_vec=True)
         self._lock = asyncio.Lock()
 
-    async def find(self, query: str, topic: Topic, limit: int = 3) -> list[Chunk]:
+    async def find(self, query: str, limit: int = 3) -> list[Chunk]:
         try:
             async with self._lock:
-                return await asyncio.to_thread(self._find_sync, query, topic, limit)
+                return await asyncio.to_thread(self._find_sync, query, limit)
         except MemvidError:
-            logger.exception("Memvid lexical retrieval failed")
+            logger.exception("Memvid semantic retrieval failed")
             return []
 
-    def _find_sync(self, query: str, topic: Topic, limit: int) -> list[Chunk]:
+    def _find_sync(self, query: str, limit: int) -> list[Chunk]:
         result = self.memory.find(
-            f"{topic.title}. {query}",
+            query,
             k=max(limit * 3, 8),
             mode="sem",
             snippet_chars=1400,
@@ -159,19 +158,8 @@ class MemvidKnowledgeRetriever:
         )
         chunks: list[Chunk] = []
         for hit in result.get("hits", []):
-            chunk = _hit_to_chunk(hit, topic)
+            chunk = _hit_to_chunk(hit)
             if chunk is None:
-                continue
-            metadata = hit.get("metadata")
-            hit_topic: str | None = None
-            if isinstance(metadata, dict):
-                value = metadata.get("topic_id")
-                hit_topic = value if isinstance(value, str) else None
-            elif match := TOPIC_ID_RE.search(str(hit.get("text") or "")):
-                hit_topic = match.group(1)
-            if hit_topic and hit_topic != topic.id:
-                continue
-            if hit_topic is None and score_chunk(f"{topic.title} {query}", chunk) < MIN_RETRIEVAL_SCORE:
                 continue
             chunks.append(chunk)
             if len(chunks) >= limit:
@@ -184,7 +172,7 @@ def _metadata(hit: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _hit_to_chunk(hit: dict[str, Any], topic: Topic) -> Chunk | None:
+def _hit_to_chunk(hit: dict[str, Any]) -> Chunk | None:
     raw_text = str(hit.get("text") or hit.get("snippet") or "").strip()
     if not raw_text:
         return None
@@ -215,7 +203,6 @@ def _hit_to_chunk(hit: dict[str, Any], topic: Topic) -> Chunk | None:
         section = str(hit.get("title") or "Раздел не указан")
     return Chunk(
         id=str(hit.get("frame_id") or hit.get("uri") or ""),
-        topic_id=topic.id,
         text=text,
         document=document,
         section=section,

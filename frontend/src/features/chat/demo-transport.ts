@@ -1,33 +1,4 @@
-import type { ChatReply, ChatTransport, ClarificationRequest } from './types.ts'
-
-/** A fixed local scenario, not an LLM response and not a backend integration. */
-const DEMO_ROUNDS: readonly Omit<ClarificationRequest, 'id'>[] = [
-  {
-    question: 'Для какого вида спорта нужен инвентарь?',
-    options: [
-      { id: 'football', label: 'Футбол' },
-      { id: 'basketball', label: 'Баскетбол' },
-      { id: 'fitness', label: 'Фитнес' },
-    ],
-  },
-  {
-    question: 'Кто будет пользоваться оборудованием?',
-    options: [
-      { id: 'children', label: 'Дети и подростки' },
-      { id: 'amateurs', label: 'Взрослые любители' },
-      { id: 'professionals', label: 'Профессиональные спортсмены' },
-    ],
-    multiple: true,
-  },
-  {
-    question: 'Какой бюджет закупки вы планируете?',
-    options: [
-      { id: 'small', label: 'До 100 000 ₽' },
-      { id: 'medium', label: 'От 100 000 до 500 000 ₽' },
-      { id: 'large', label: 'Более 500 000 ₽' },
-    ],
-  },
-]
+import type { ChatReply, ChatTransport } from './types.ts'
 
 function abortError(): DOMException {
   return new DOMException('The demo request was aborted', 'AbortError')
@@ -53,24 +24,16 @@ export function demoDelay(milliseconds: number, signal: AbortSignal): Promise<vo
   })
 }
 
+/** A fixed local scenario, not an LLM response and not a backend integration. */
 export const demoTransport: ChatTransport = {
-  async send(messages, signal): Promise<ChatReply> {
+  async send(_messages, signal): Promise<ChatReply> {
     await demoDelay(650, signal)
-    const count = new Set(messages.filter((message) => message.role === 'user' && message.clarificationId).map((message) => message.clarificationId)).size
-    const round = DEMO_ROUNDS[count]
-    if (round) {
-      const firstUserId = messages.find((message) => message.role === 'user')?.id ?? 'start'
-      return {
-        kind: 'clarification',
-        content: count === 0 ? 'Это демонстрационный сценарий. Давайте уточним запрос в три шага.' : 'Ответ принят в демо-сценарии. Уточним следующий параметр.',
-        clarification: { ...round, id: `demo:${firstUserId}:${count + 1}` },
-      }
-    }
     return {
       kind: 'answer',
+      offerSpecialist: true,
       content:
         'Пример ответа: для оснащения тренировочной группы начните с базового набора: ' +
-        'мячи или другой инвентарь выбранного вида спорта, разметочные конусы, манишки и насос. ' +
+        'мячи или другой спортивный инвентарь, разметочные конусы, манишки и насос. ' +
         'Для детей выбирайте размер и вес по возрасту, для регулярных занятий — износостойкие материалы. ' +
         'В закупке отдельно укажите количество участников, условия использования и требования к безопасности; ' +
         'часть бюджета оставьте на хранение и замену расходных материалов. ' +

@@ -31,11 +31,8 @@ class ConversationSchema(BaseSchema):
     revision: int = 0
     closed: bool = False
     status: DialogStatus | None = None
-    topic_id: str | None = None
     line: SupportLine | None = None
     reason: str | None = None
-    failed_clarifications: int = 0
-    pending_option_ids: list[str] = Field(default_factory=list)
     citations: list[ConversationCitationSchema] = Field(default_factory=list)
     messages: list[ConversationMessageSchema] = Field(default_factory=list)
     updated_at: dtm.datetime | None = None
@@ -69,11 +66,8 @@ def document_to_state(document: Conversation) -> ConversationState:
         revision=document.revision,
         closed=document.closed,
         status=document.status,
-        topic_id=document.topic_id,
         line=document.line,
         reason=document.reason,
-        failed_clarifications=document.failed_clarifications,
-        pending_option_ids=list(document.pending_option_ids),
         citations=[
             StoredCitation(
                 document=item.document,
@@ -125,11 +119,8 @@ class MongoConversationStore:
                 "$set": {
                     "closed": state.closed,
                     "status": state.status,
-                    "topic_id": state.topic_id,
                     "line": state.line,
                     "reason": state.reason,
-                    "failed_clarifications": state.failed_clarifications,
-                    "pending_option_ids": list(state.pending_option_ids),
                     "updated_at": state.updated_at,
                     "citations": [
                         ConversationCitationSchema(

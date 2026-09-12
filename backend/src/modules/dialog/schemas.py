@@ -20,11 +20,6 @@ class SupportLine(StrEnum):
     L3 = "L3"
 
 
-class TopicRef(BaseSchema):
-    id: str
-    title: str
-
-
 class Citation(BaseSchema):
     document: str
     section: str
@@ -42,9 +37,7 @@ class DialogResponse(BaseSchema):
     id: str
     reply: str
     status: DialogStatus | None = None
-    topic: TopicRef | None = None
     line: SupportLine | None = None
-    clarification_options: list[TopicRef] = Field(default_factory=list)
     citations: list[Citation] = Field(default_factory=list)
     closed: bool = False
     reason: str | None = None
@@ -56,7 +49,6 @@ class DialogListItem(BaseSchema):
     title: str
     preview: str = ""
     status: DialogStatus | None = None
-    topic: TopicRef | None = None
     line: SupportLine | None = None
     closed: bool = False
     reason: str | None = None

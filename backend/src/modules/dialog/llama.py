@@ -5,22 +5,13 @@ from typing import Protocol
 import httpx
 
 from src.logging_ import logger
-from src.modules.dialog.models import Chunk, Topic
+from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import normalize_text
 from src.pydantic_base import BaseSchema
 
 NUMBER_RE = re.compile(r"\d{2,}")
 URL_RE = re.compile(r"(?:https?://|www\.)[^\s)\]}]+", re.IGNORECASE)
 ANSWER_PART_RE = re.compile(r"[^.!?\n]+[.!?]?")
-
-
-class TopicAdvisor(Protocol):
-    async def suggest_topic_id(
-        self,
-        text: str,
-        topics: list[Topic],
-        history: list[tuple[str, str]] | None = None,
-    ) -> str | None: ...
 
 
 class GroundedAnswer(BaseSchema):
@@ -33,29 +24,19 @@ class AnswerGenerator(Protocol):
         self,
         question: str,
         history: list[tuple[str, str]],
-        topic: Topic,
         chunks: list[Chunk],
     ) -> GroundedAnswer | None: ...
 
 
-class DialogLlamaClient(TopicAdvisor, AnswerGenerator, Protocol):
+class DialogLlamaClient(AnswerGenerator, Protocol):
     async def aclose(self) -> None: ...
 
 
 class NullLlamaClient:
-    async def suggest_topic_id(
-        self,
-        text: str,
-        topics: list[Topic],
-        history: list[tuple[str, str]] | None = None,
-    ) -> str | None:
-        return None
-
     async def generate_answer(
         self,
         question: str,
         history: list[tuple[str, str]],
-        topic: Topic,
         chunks: list[Chunk],
     ) -> GroundedAnswer | None:
         return None
@@ -65,7 +46,7 @@ class NullLlamaClient:
 
 
 class LlamaCppClient:
-    """Local llama.cpp client with validated topic and grounded-answer output."""
+    """Local llama.cpp client with validated grounded-answer output."""
 
     def __init__(
         self,
@@ -73,50 +54,20 @@ class LlamaCppClient:
         base_url: str,
         model: str = "",
         timeout_seconds: float = 8.0,
-        max_tokens: int = 24,
         answer_max_tokens: int = 192,
         temperature: float = 0.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout_seconds = timeout_seconds
-        self.max_tokens = max_tokens
         self.answer_max_tokens = answer_max_tokens
         self.temperature = temperature
         self._client = httpx.AsyncClient(timeout=self.timeout_seconds)
-
-    async def suggest_topic_id(
-        self,
-        text: str,
-        topics: list[Topic],
-        history: list[tuple[str, str]] | None = None,
-    ) -> str | None:
-        allowed = {topic.id: topic for topic in topics}
-        catalog_lines = "\n".join(f"{topic.id}: {topic.title}" for topic in topics[:8])
-        history_text = _compact_history(history, limit=4)
-        prompt = (
-            'Выбери одну тему. JSON: {"topic_id":"t-001"} или {"topic_id":null}. '
-            "Не выдумывай id.\n"
-            f"{catalog_lines}\n"
-            f"{history_text}\n"
-            f"Сейчас: {text}"
-        )
-        content = await self._complete(
-            [
-                {"role": "system", "content": "Классификатор тем. Только JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=min(self.max_tokens, 24),
-        )
-        if content is None:
-            return None
-        return _parse_topic_id(content, allowed)
 
     async def generate_answer(
         self,
         question: str,
         history: list[tuple[str, str]],
-        topic: Topic,
         chunks: list[Chunk],
     ) -> GroundedAnswer | None:
         if not chunks:
@@ -127,7 +78,7 @@ class LlamaCppClient:
             "Ответь только по источникам, дословными предложениями. "
             "Для общего вопроса дай несколько разных релевантных фактов без повторов. "
             'JSON: {"can_answer":true,"answer":"...","citation_ids":["id"]}.\n'
-            f"Тема: {topic.title}\n{history_text}\n"
+            f"{history_text}\n"
             f"Вопрос: {question}\n"
             f"{sources}"
         )
@@ -187,20 +138,6 @@ def _compact_history(history: list[tuple[str, str]] | None, *, limit: int) -> st
             compact = compact[:277] + "..."
         lines.append(f"{role}: {compact}")
     return "\n".join(lines)
-
-
-def _parse_topic_id(content: str, allowed: dict[str, Topic]) -> str | None:
-    match = re.search(r"\{.*\}", content, flags=re.DOTALL)
-    raw = match.group(0) if match else content.strip()
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        stripped = content.strip().strip('"')
-        return stripped if stripped in allowed else None
-    topic_id = parsed.get("topic_id") if isinstance(parsed, dict) else None
-    if isinstance(topic_id, str) and topic_id in allowed:
-        return topic_id
-    return None
 
 
 def _json_object(content: str) -> dict[str, object] | None:

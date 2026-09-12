@@ -1,17 +1,8 @@
 from fastapi import HTTPException, status
 
 from src.modules.dialog.abuse import is_abuse
-from src.modules.dialog.classify import (
-    clarification_options,
-    is_bare_option_selection,
-    is_capability_question,
-    is_greeting,
-    lock_topic,
-    match_pending_option,
-    rank_topics,
-)
+from src.modules.dialog.classify import is_capability_question, is_greeting
 from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient
-from src.modules.dialog.models import KnowledgeBase, Topic
 from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_reply
 from src.modules.dialog.routing import is_l2_request
 from src.modules.dialog.schemas import (
@@ -23,7 +14,6 @@ from src.modules.dialog.schemas import (
     DialogStatus,
     DialogView,
     SupportLine,
-    TopicRef,
 )
 from src.modules.dialog.store import (
     ConversationConflictError,
@@ -35,8 +25,6 @@ from src.modules.dialog.store import (
 from src.modules.dialog.texts import (
     ABUSE_REPLY,
     CAPABILITIES_REPLY,
-    CLARIFY_FAILED_REPLY,
-    CLARIFY_REPLY,
     CLOSED_REPLY,
     GREETING_REPLY,
     L1_REPLY,
@@ -53,17 +41,13 @@ class DialogClosedError(HTTPException):
 class DialogService:
     def __init__(
         self,
-        knowledge: KnowledgeBase,
         store: ConversationStore,
         retriever: KnowledgeRetriever,
         llama_client: DialogLlamaClient | None = None,
-        max_clarifications: int = 3,
     ) -> None:
-        self.knowledge = knowledge
         self.store = store
         self.retriever = retriever
         self.llama_client = llama_client or NullLlamaClient()
-        self.max_clarifications = max_clarifications
 
     async def create(self) -> DialogView:
         state = await self.store.create()
@@ -108,7 +92,6 @@ class DialogService:
             )
         history = "\n".join(user_messages)
         line = SupportLine.L2 if is_l2_request(history) else SupportLine.L1
-        topic = self.knowledge.topic_by_id(state.topic_id) if state.topic_id else None
         response = self._finish(
             state,
             reply=L2_REPLY if line == SupportLine.L2 else L1_REPLY,
@@ -116,7 +99,6 @@ class DialogService:
             closed=True,
             reason="specialist_requested",
             line=line,
-            topic=topic,
         )
         state.messages.append(StoredMessage(role="assistant", content=response.reply))
         await self._save(state)
@@ -149,70 +131,21 @@ class DialogService:
             )
 
         if is_greeting(text) or is_capability_question(text):
-            ranked = rank_topics("", self.knowledge)
-            topics = clarification_options(ranked, self.knowledge)
-            state.topic_id = None
-            state.pending_option_ids = [item.id for item in topics]
-            state.status = DialogStatus.CLARIFYING
-            state.reason = None
-            state.line = None
-            state.citations = []
-            reply = GREETING_REPLY if is_greeting(text) else CAPABILITIES_REPLY
-            return self._response(state, reply, options=topics)
-
-        pending = [
-            topic
-            for topic_id in state.pending_option_ids
-            if (topic := self.knowledge.topic_by_id(topic_id)) is not None
-        ]
-        if pending and (picked := match_pending_option(text, pending)) is not None:
-            if is_bare_option_selection(text, picked):
-                state.topic_id = picked.id
-                state.pending_option_ids = []
-                state.status = DialogStatus.CLARIFYING
-                state.reason = None
-                state.line = None
-                state.citations = []
-                return self._response(
-                    state,
-                    f"Что именно вас интересует по теме «{picked.title}»?",
-                    topic=picked,
-                )
+            return self._finish(
+                state,
+                reply=GREETING_REPLY if is_greeting(text) else CAPABILITIES_REPLY,
+                status=DialogStatus.CLARIFYING,
+                closed=False,
+                reason=None,
+                line=None,
+            )
 
         dialog_query = self._dialog_query(state)
-        topic = await self._resolve_topic(state, text, dialog_query)
-        if topic is None:
-            if state.failed_clarifications >= self.max_clarifications:
-                return self._offer_specialist(state, CLARIFY_FAILED_REPLY, "topic_unresolved")
-            options = [self.knowledge.topic_by_id(item) for item in state.pending_option_ids]
-            topics = [item for item in options if item is not None]
-            if not topics:
-                ranked = rank_topics(text, self.knowledge)
-                topics = clarification_options(ranked, self.knowledge)
-                state.pending_option_ids = [item.id for item in topics]
-            state.failed_clarifications += 1
-            state.status = DialogStatus.CLARIFYING
-            state.line = None
-            state.citations = []
-            return self._response(
-                state,
-                CLARIFY_REPLY,
-                options=topics,
-            )
-
-        state.topic_id = topic.id
-        state.pending_option_ids = []
-        state.line = None
-        chunks = await self.retriever.find(dialog_query, topic)
+        chunks = await self.retriever.find(dialog_query)
         if not chunks:
-            return self._offer_specialist(
-                state,
-                NO_KNOWLEDGE_REPLY,
-                "no_knowledge",
-                topic=topic,
-            )
+            return self._offer_specialist(state)
         history = [(item.role, item.content) for item in state.messages]
-        generated = await self.llama_client.generate_answer(text, history, topic, chunks)
+        generated = await self.llama_client.generate_answer(text, history, chunks)
         if generated is not None:
             selected = [chunk for chunk in chunks if chunk.id in generated.citation_ids]
             reply = generated.text
@@ -220,87 +153,34 @@ class DialogService:
             selected = chunks
             reply = extractive_reply(dialog_query, selected)
         if not reply:
-            return self._offer_specialist(
-                state,
-                NO_KNOWLEDGE_REPLY,
-                "no_knowledge",
-                topic=topic,
-            )
+            return self._offer_specialist(state)
         state.status = DialogStatus.ANSWERED
         state.closed = False
         state.reason = None
         state.line = None
         state.citations = [
-            StoredCitation(
-                document=chunk.document,
-                section=chunk.section,
-                path=chunk.path,
-            )
-            for chunk in selected
+            StoredCitation(document=chunk.document, section=chunk.section, path=chunk.path) for chunk in selected
         ]
         return self._response(
             state,
             reply,
-            topic=topic,
             citations=[Citation(document=chunk.document, section=chunk.section, path=chunk.path) for chunk in selected],
         )
-
-    async def _resolve_topic(
-        self,
-        state: ConversationState,
-        text: str,
-        dialog_query: str,
-    ) -> Topic | None:
-        if state.topic_id:
-            current = self.knowledge.topic_by_id(state.topic_id)
-            if current is not None:
-                return current
-        pending: list[Topic] = []
-        for topic_id in state.pending_option_ids:
-            found = self.knowledge.topic_by_id(topic_id)
-            if found is not None:
-                pending.append(found)
-        if pending:
-            picked = match_pending_option(text, pending)
-            if picked is not None:
-                return picked
-        ranked = rank_topics(dialog_query, self.knowledge)
-        locked = lock_topic(ranked, dialog_query)
-        if locked is not None:
-            return locked
-        candidate_topics = [item.topic for item in ranked[:6] if item.score > 0]
-        if candidate_topics:
-            history = [(item.role, item.content) for item in state.messages]
-            suggested_id = await self.llama_client.suggest_topic_id(text, candidate_topics, history)
-            if suggested_id:
-                suggested = self.knowledge.topic_by_id(suggested_id)
-                if suggested is not None:
-                    return suggested
-        options = clarification_options(ranked, self.knowledge)
-        state.pending_option_ids = [item.id for item in options]
-        return None
 
     @staticmethod
     def _dialog_query(state: ConversationState) -> str:
         user_messages = [item.content for item in state.messages if item.role == "user"]
         return "\n".join(user_messages[-8:])
 
-    def _offer_specialist(
-        self,
-        state: ConversationState,
-        reply: str,
-        reason: str,
-        topic: Topic | None = None,
-    ) -> DialogResponse:
-        state.status = DialogStatus.ESCALATE
-        state.closed = False
-        state.reason = reason
-        state.line = None
-        state.pending_option_ids = []
-        state.citations = []
-        if topic is not None:
-            state.topic_id = topic.id
-        return self._response(state, reply, topic=topic)
+    def _offer_specialist(self, state: ConversationState) -> DialogResponse:
+        return self._finish(
+            state,
+            reply=NO_KNOWLEDGE_REPLY,
+            status=DialogStatus.ESCALATE,
+            closed=False,
+            reason="no_knowledge",
+            line=None,
+        )
 
     def _finish(
         self,
@@ -311,41 +191,26 @@ class DialogService:
         closed: bool,
         reason: str | None,
         line: SupportLine | None,
-        topic: Topic | None = None,
     ) -> DialogResponse:
         state.status = status
         state.closed = closed
         state.reason = reason
         state.line = line
-        state.pending_option_ids = []
         state.citations = []
-        if topic is not None:
-            state.topic_id = topic.id
-        return self._response(state, reply, topic=topic)
-
-    def _topic_ref(self, topic: Topic | None = None, state: ConversationState | None = None) -> TopicRef | None:
-        if topic is None and state and state.topic_id:
-            topic = self.knowledge.topic_by_id(state.topic_id)
-        if topic is None:
-            return None
-        return TopicRef(id=topic.id, title=topic.title)
+        return self._response(state, reply)
 
     def _response(
         self,
         state: ConversationState,
         reply: str,
         *,
-        topic: Topic | None = None,
-        options: list[Topic] | None = None,
         citations: list[Citation] | None = None,
     ) -> DialogResponse:
         return DialogResponse(
             id=state.id,
             reply=reply,
             status=state.status,
-            topic=self._topic_ref(topic, state),
             line=state.line,
-            clarification_options=[TopicRef(id=item.id, title=item.title) for item in options or []],
             citations=citations or [],
             closed=state.closed,
             reason=state.reason,
@@ -353,16 +218,13 @@ class DialogService:
         )
 
     def _list_item(self, state: ConversationState) -> DialogListItem:
-        topic = self._topic_ref(state=state)
         first_user = next((item.content for item in state.messages if item.role == "user"), "")
         last_user = next((item.content for item in reversed(state.messages) if item.role == "user"), "")
-        title = topic.title if topic is not None else _preview_text(first_user) or "Новое обращение"
         return DialogListItem(
             id=state.id,
-            title=title,
+            title=_preview_text(first_user) or "Новое обращение",
             preview=_preview_text(last_user or first_user),
             status=state.status,
-            topic=topic,
             line=state.line,
             closed=state.closed,
             reason=state.reason,
@@ -370,13 +232,8 @@ class DialogService:
         )
 
     def _view(self, state: ConversationState, reply: str) -> DialogView:
-        options = [
-            topic
-            for topic_id in state.pending_option_ids
-            if (topic := self.knowledge.topic_by_id(topic_id)) is not None
-        ]
         citations = [Citation(document=item.document, section=item.section, path=item.path) for item in state.citations]
-        base = self._response(state, reply, options=options, citations=citations)
+        base = self._response(state, reply, citations=citations)
         return DialogView(
             **base.model_dump(),
             messages=[DialogMessage(role=item.role, content=item.content) for item in state.messages],

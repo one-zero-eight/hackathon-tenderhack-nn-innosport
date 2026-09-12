@@ -1,22 +1,4 @@
-export interface ClarificationOption {
-  id: string
-  label: string
-  description?: string
-}
-
-export interface ClarificationRequest {
-  id: string
-  question: string
-  options: ClarificationOption[]
-  multiple?: boolean
-}
-
-export interface ClarificationAnswer {
-  optionIds: string[]
-  other: string
-}
-
-export type ChatMessageKind = 'answer' | 'clarification' | 'handoff' | 'notice'
+export type ChatMessageKind = 'answer' | 'handoff' | 'notice'
 export type FeedbackRating = 'complete' | 'partial' | 'irrelevant'
 
 export interface SpecialistResponse {
@@ -44,8 +26,6 @@ export interface ChatMessage {
   content: string
   createdAt: string
   kind?: ChatMessageKind
-  clarification?: ClarificationRequest
-  clarificationId?: string
 }
 
 export interface Chat {
@@ -65,7 +45,6 @@ export interface Chat {
 export interface ChatReply {
   content: string
   kind?: ChatMessageKind
-  clarification?: ClarificationRequest
   closed?: boolean
   offerSpecialist?: boolean
   dialogId?: string

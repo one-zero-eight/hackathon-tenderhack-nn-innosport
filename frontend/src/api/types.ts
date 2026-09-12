@@ -108,7 +108,6 @@ export interface components {
              */
             preview: string;
             status?: components["schemas"]["DialogStatus"] | null;
-            topic?: components["schemas"]["TopicRef"] | null;
             line?: components["schemas"]["SupportLine"] | null;
             /**
              * Closed
@@ -137,10 +136,7 @@ export interface components {
             /** Reply */
             reply: string;
             status?: components["schemas"]["DialogStatus"] | null;
-            topic?: components["schemas"]["TopicRef"] | null;
             line?: components["schemas"]["SupportLine"] | null;
-            /** Clarification Options */
-            clarification_options?: components["schemas"]["TopicRef"][];
             /** Citations */
             citations?: components["schemas"]["Citation"][];
             /**
@@ -165,10 +161,7 @@ export interface components {
             /** Reply */
             reply: string;
             status?: components["schemas"]["DialogStatus"] | null;
-            topic?: components["schemas"]["TopicRef"] | null;
             line?: components["schemas"]["SupportLine"] | null;
-            /** Clarification Options */
-            clarification_options?: components["schemas"]["TopicRef"][];
             /** Citations */
             citations?: components["schemas"]["Citation"][];
             /**
@@ -197,14 +190,7 @@ export interface components {
          * SupportLine
          * @enum {string}
          */
-        SupportLine: "L1" | "L2";
-        /** TopicRef */
-        TopicRef: {
-            /** Id */
-            id: string;
-            /** Title */
-            title: string;
-        };
+        SupportLine: "L1" | "L2" | "L3";
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -235,7 +221,6 @@ export type SchemaDialogView = components['schemas']['DialogView'];
 export type SchemaHttpValidationError = components['schemas']['HTTPValidationError'];
 export type SchemaMessageCreate = components['schemas']['MessageCreate'];
 export type SchemaSupportLine = components['schemas']['SupportLine'];
-export type SchemaTopicRef = components['schemas']['TopicRef'];
 export type SchemaValidationError = components['schemas']['ValidationError'];
 export type $defs = Record<string, never>;
 export interface operations {

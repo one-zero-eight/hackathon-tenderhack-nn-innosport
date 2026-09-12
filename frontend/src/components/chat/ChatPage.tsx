@@ -72,7 +72,6 @@ export default function ChatPage() {
               ref={transcriptRef}
               chat={chat.activeChat}
               busy={chat.busy}
-              onAnswer={chat.answer}
               onNearBottomChange={setNearBottom}
               afterMessages={
                 (chat.canFeedback || chat.activeChat.feedback) ? (
@@ -113,7 +112,7 @@ export default function ChatPage() {
                   onReopen={chat.reopenChat}
                 />
                 {!closed && !chat.activeChat.handoff && chat.canContactSpecialist && <SpecialistContact busy={chat.busy} onContact={chat.contactSpecialist} />}
-                {!closed && <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} awaitingClarification={!!chat.pendingClarification} />}
+                {!closed && <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} />}
               </div>
             </div>
           </main>

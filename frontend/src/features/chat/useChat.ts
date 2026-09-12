@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { demoTransport } from './demo-transport.ts'
 import type { SchemaDialogListItem, SchemaDialogView } from '@/api/types'
 import { mergeRemoteDialog, mergeRemoteList } from './dialog-map.ts'
-import { applyExchange, applySpecialistHandoff, canContactSpecialist, canFeedback, CHAT_STORAGE_KEY, CHAT_STORAGE_VERSION, clarificationCount, closeChat as closeChatModel, createChat, dismissFeedback as dismissFeedbackModel, formatClarificationAnswer, isChatReply, isSpecialistResponse, parseChatHistory, pendingClarification, reopenChat as reopenChatModel, serializeChatHistory, submitFeedback as submitFeedbackModel, withOnlyChat, withoutChat } from './model.ts'
+import { applyExchange, applySpecialistHandoff, canContactSpecialist, canFeedback, CHAT_STORAGE_KEY, CHAT_STORAGE_VERSION, closeChat as closeChatModel, createChat, dismissFeedback as dismissFeedbackModel, isChatReply, isSpecialistResponse, parseChatHistory, reopenChat as reopenChatModel, serializeChatHistory, submitFeedback as submitFeedbackModel, withOnlyChat, withoutChat } from './model.ts'
 import type { ChatHistory } from './model.ts'
-import type { Chat, ChatMessage, ChatTransport, ClarificationAnswer, ClarificationRequest, FeedbackRating } from './types.ts'
+import type { Chat, ChatMessage, ChatTransport, FeedbackRating } from './types.ts'
 
 let fallbackId = 0
 function newId(): string {
@@ -36,7 +36,6 @@ export interface UseChatResult {
   syncList: (items: readonly SchemaDialogListItem[]) => void
   syncDialog: (view: SchemaDialogView) => void
   send: (text: string) => Promise<boolean>
-  answer: (request: ClarificationRequest, answer: ClarificationAnswer) => Promise<boolean>
   closeChat: () => void
   reopenChat: () => void
   contactSpecialist: () => Promise<boolean>
@@ -47,8 +46,6 @@ export interface UseChatResult {
   busy: boolean
   mutating: boolean
   error: string | null
-  clarificationCount: number
-  pendingClarification: ClarificationRequest | undefined
 }
 
 export function useChat(transport: ChatTransport = demoTransport): UseChatResult {
@@ -144,7 +141,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
   )
 
   const submit = useCallback(
-    async (chatId: string, content: string, clarificationId?: string): Promise<boolean> => {
+    async (chatId: string, content: string): Promise<boolean> => {
       // This synchronous ref lock catches same-tick double clicks before React renders.
       if (operations.current.has(chatId)) return false
       const chat = historyRef.current.chats.find((item) => item.id === chatId)
@@ -159,7 +156,6 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
         role: 'user',
         content: content.trim(),
         createdAt: new Date().toISOString(),
-        ...(clarificationId ? { clarificationId } : {}),
       }
       let remoteId = chatId
       try {
@@ -185,7 +181,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
           }
         }
         // Never erase text typed during the request, or another chat's composer.
-        if (!clarificationId && originalDraft.trim() === content.trim() && (draftsRef.current[remoteId] ?? draftsRef.current[chatId] ?? '') === originalDraft) {
+        if (originalDraft.trim() === content.trim() && (draftsRef.current[remoteId] ?? draftsRef.current[chatId] ?? '') === originalDraft) {
           const nextDrafts = { ...draftsRef.current, [remoteId]: '' }
           delete nextDrafts[chatId]
           draftsRef.current = nextDrafts
@@ -216,29 +212,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
       const current = historyRef.current
       const chat = current.chats.find((item) => item.id === current.activeChatId)
       if (!chat || chat.status !== 'open' || operations.current.has(chat.id)) return false
-      if (pendingClarification(chat)) {
-        setErrors((errors) => ({ ...errors, [chat.id]: 'Сначала ответьте на уточняющий вопрос.' }))
-        return false
-      }
       return submit(chat.id, text)
-    },
-    [submit],
-  )
-
-  const answer = useCallback(
-    async (request: ClarificationRequest, value: ClarificationAnswer): Promise<boolean> => {
-      const current = historyRef.current
-      const chat = current.chats.find((item) => item.id === current.activeChatId)
-      if (!chat || chat.status !== 'open' || operations.current.has(chat.id)) return false
-      const pending = pendingClarification(chat)
-      if (!pending || pending.id !== request.id) return false
-      // Use the canonical request from history instead of caller-provided labels/options.
-      const content = formatClarificationAnswer(pending, value)
-      if (!content) {
-        setErrors((errors) => ({ ...errors, [chat.id]: 'Выберите вариант ответа или заполните «Другое».' }))
-        return false
-      }
-      return submit(chat.id, content, pending.id)
     },
     [submit],
   )
@@ -379,7 +353,6 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     syncList,
     syncDialog,
     send,
-    answer,
     closeChat,
     reopenChat,
     contactSpecialist,
@@ -390,7 +363,5 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     busy: busyChats[activeChat.id] ?? false,
     mutating: Object.values(busyChats).some(Boolean),
     error: errors[activeChat.id] ?? null,
-    clarificationCount: clarificationCount(activeChat),
-    pendingClarification: pendingClarification(activeChat),
   }
 }

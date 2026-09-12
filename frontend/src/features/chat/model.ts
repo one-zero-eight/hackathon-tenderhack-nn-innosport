@@ -1,4 +1,4 @@
-import type { Chat, ChatMessage, ChatMessageKind, ChatReply, ClarificationAnswer, ClarificationRequest, FeedbackRating, SpecialistResponse } from './types.ts'
+import type { Chat, ChatMessage, ChatMessageKind, ChatReply, FeedbackRating, SpecialistResponse } from './types.ts'
 
 // Keep the original key so valid v1 local history is migrated in place.
 // Feedback stays local. Conversation turns are sent to the dialog API.
@@ -37,7 +37,7 @@ export function canFeedback(chat: Chat): boolean {
 }
 
 export function canContactSpecialist(chat: Chat): boolean {
-  return chat.status === 'open' && !chat.handoff && (clarificationCount(chat) >= 3 || Boolean(chat.offerSpecialist))
+  return chat.status === 'open' && !chat.handoff && Boolean(chat.offerSpecialist)
 }
 
 export function closeChat(chat: Chat, noticeId: string, now: string): Chat {
@@ -83,22 +83,6 @@ export function dismissFeedback(chat: Chat): Chat {
   return canFeedback(chat) ? { ...chat, feedbackDismissed: true } : chat
 }
 
-/** Only committed user messages count; repeated answers never inflate the count. */
-export function clarificationCount(chat: Chat): number {
-  return new Set(chat.messages.filter((message) => message.role === 'user' && message.clarificationId).map((message) => message.clarificationId)).size
-}
-
-export function pendingClarification(chat: Chat): ClarificationRequest | undefined {
-  const answered = new Set(chat.messages.filter((message) => message.role === 'user').map((message) => message.clarificationId))
-  for (let index = chat.messages.length - 1; index >= 0; index -= 1) {
-    const message = chat.messages[index]
-    if (message.role === 'assistant' && message.clarification && !answered.has(message.clarification.id)) {
-      return message.clarification
-    }
-  }
-  return undefined
-}
-
 /** Commit a successful exchange together; never call this on transport failure. */
 export function applyExchange(chat: Chat, userMessage: ChatMessage, reply: ChatReply): Chat {
   if (chat.status === 'closed') throw new Error('Cannot send to a closed chat')
@@ -108,9 +92,8 @@ export function applyExchange(chat: Chat, userMessage: ChatMessage, reply: ChatR
     id: `${userMessage.id}:reply`,
     role: 'assistant',
     content: reply.content,
-    kind: reply.kind ?? (reply.clarification ? 'clarification' : 'notice'),
+    kind: reply.kind ?? 'notice',
     createdAt: userMessage.createdAt,
-    ...(reply.clarification ? { clarification: reply.clarification } : {}),
   }
   const firstMessage = !chat.messages.some((message) => message.role === 'user')
   const title = userMessage.content.trim().replace(/\s+/g, ' ')
@@ -125,17 +108,6 @@ export function applyExchange(chat: Chat, userMessage: ChatMessage, reply: ChatR
   return { ...next, status: 'closed', closedAt: userMessage.createdAt }
 }
 
-/** Render human-readable labels, never implementation option IDs. */
-export function formatClarificationAnswer(request: ClarificationRequest, answer: ClarificationAnswer): string | null {
-  const ids = [...new Set(answer.optionIds)]
-  if (ids.some((id) => !request.options.some((option) => option.id === id))) return null
-  const other = answer.other.trim()
-  if (!request.multiple && ids.length + Number(Boolean(other)) > 1) return null
-  const labels = request.options.filter((option) => ids.includes(option.id)).map((option) => option.label)
-  if (other) labels.push(other)
-  return labels.length ? labels.join('; ') : null
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -148,20 +120,8 @@ function isTimestamp(value: unknown): value is string {
   return typeof value === 'string' && Number.isFinite(Date.parse(value))
 }
 
-export function isClarificationRequest(value: unknown): value is ClarificationRequest {
-  if (!isRecord(value)) return false
-  return (
-    isNonemptyString(value.id) &&
-    isNonemptyString(value.question) &&
-    (value.multiple === undefined || typeof value.multiple === 'boolean') &&
-    Array.isArray(value.options) &&
-    value.options.every((option: unknown) => isRecord(option) && isNonemptyString(option.id) && isNonemptyString(option.label) && (option.description === undefined || typeof option.description === 'string')) &&
-    new Set(value.options.map((option) => option.id)).size === value.options.length
-  )
-}
-
 function isMessageKind(value: unknown): value is ChatMessageKind {
-  return value === 'answer' || value === 'clarification' || value === 'handoff' || value === 'notice'
+  return value === 'answer' || value === 'handoff' || value === 'notice'
 }
 
 function isFeedbackRating(value: unknown): value is FeedbackRating {
@@ -184,28 +144,25 @@ export function isChatReply(value: unknown): value is ChatReply {
     isRecord(value) &&
     typeof value.content === 'string' &&
     (value.kind === undefined || isMessageKind(value.kind)) &&
-    (value.clarification === undefined || isClarificationRequest(value.clarification)) &&
     (value.closed === undefined || typeof value.closed === 'boolean') &&
     (value.offerSpecialist === undefined || typeof value.offerSpecialist === 'boolean') &&
     (value.dialogId === undefined || isNonemptyString(value.dialogId))
   )
 }
 
-function isMessage(value: unknown): value is ChatMessage {
+function isStoredMessage(value: unknown): value is Omit<ChatMessage, 'kind'> & { kind?: ChatMessageKind | 'clarification' } {
   return (
     isRecord(value) &&
     isNonemptyString(value.id) &&
     (value.role === 'user' || value.role === 'assistant') &&
     typeof value.content === 'string' &&
-    (value.kind === undefined || isMessageKind(value.kind)) &&
-    isTimestamp(value.createdAt) &&
-    (value.clarificationId === undefined || isNonemptyString(value.clarificationId)) &&
-    (value.clarification === undefined || isClarificationRequest(value.clarification))
+    (value.kind === undefined || value.kind === 'clarification' || isMessageKind(value.kind)) &&
+    isTimestamp(value.createdAt)
   )
 }
 
 function migrateChat(value: unknown, version: number): Chat | null {
-  if (!isRecord(value) || !isNonemptyString(value.id) || !isNonemptyString(value.title) || !isTimestamp(value.updatedAt) || !Array.isArray(value.messages) || !value.messages.every(isMessage) || new Set(value.messages.map((message) => message.id)).size !== value.messages.length) return null
+  if (!isRecord(value) || !isNonemptyString(value.id) || !isNonemptyString(value.title) || !isTimestamp(value.updatedAt) || !Array.isArray(value.messages) || !value.messages.every(isStoredMessage) || new Set(value.messages.map((message) => message.id)).size !== value.messages.length) return null
   const status = version === 1 && value.status === undefined ? 'open' : value.status
   const feedbackDismissed = version === 1 && value.feedbackDismissed === undefined ? false : value.feedbackDismissed
   if ((status !== 'open' && status !== 'closed') || typeof feedbackDismissed !== 'boolean') return null
@@ -223,7 +180,14 @@ function migrateChat(value: unknown, version: number): Chat | null {
     updatedAt: value.updatedAt,
     status,
     feedbackDismissed,
-    messages: value.messages.map((message) => ({ ...message, kind: message.kind ?? (message.clarification ? 'clarification' : 'notice') })),
+    // Preserve saved conversation text, but discard retired choice metadata.
+    messages: value.messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt,
+      kind: message.kind === 'clarification' ? 'notice' : message.kind ?? 'notice',
+    })),
     ...(status === 'closed' ? { closedAt: value.closedAt as string } : {}),
     ...(handoff ? { handoff: { requestId: handoff.requestId as string, simulated: handoff.simulated as boolean, ...(handoff.specialistType !== undefined ? { specialistType: handoff.specialistType as string } : {}), createdAt: handoff.createdAt as string } } : {}),
     ...(feedback ? { feedback: { rating: feedback.rating as FeedbackRating, comment: feedback.rating === 'complete' ? '' : feedback.comment as string, submittedAt: feedback.submittedAt as string } } : {}),

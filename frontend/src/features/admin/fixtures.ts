@@ -20,20 +20,11 @@ export const adminAppeals: AdminAppeal[] = [
         {
           id: 'browser-a1',
           role: 'assistant',
-          kind: 'clarification',
+          kind: 'notice',
           content: 'Уточните, пожалуйста, что происходит после входа.',
           createdAt: '2026-09-12T09:20:00.000Z',
-          clarification: {
-            id: 'browser-question',
-            question: 'Что отображается после авторизации?',
-            options: [
-              { id: 'blank', label: 'Пустая страница' },
-              { id: 'error', label: 'Сообщение об ошибке' },
-              { id: 'loading', label: 'Бесконечная загрузка' },
-            ],
-          },
         },
-        { id: 'browser-u2', role: 'user', content: 'Бесконечная загрузка в Firefox.', clarificationId: 'browser-question', createdAt: '2026-09-12T09:23:00.000Z' },
+        { id: 'browser-u2', role: 'user', content: 'Бесконечная загрузка в Firefox.', createdAt: '2026-09-12T09:23:00.000Z' },
         {
           id: 'browser-a2',
           role: 'assistant',
@@ -98,18 +89,9 @@ export const adminAppeals: AdminAppeal[] = [
         {
           id: 'contract-a1',
           role: 'assistant',
-          kind: 'clarification',
+          kind: 'notice',
           content: 'Сначала нужно определить тип реквизитов и текущий статус договора.',
           createdAt: '2026-09-12T11:41:00.000Z',
-          clarification: {
-            id: 'contract-question',
-            question: 'Какие реквизиты необходимо изменить?',
-            options: [
-              { id: 'bank', label: 'Банковские реквизиты' },
-              { id: 'legal', label: 'Юридический адрес' },
-              { id: 'contact', label: 'Контактные данные' },
-            ],
-          },
         },
       ],
     },

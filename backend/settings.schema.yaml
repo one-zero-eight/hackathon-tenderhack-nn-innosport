@@ -24,12 +24,11 @@ $defs:
     type: object
   LlamaCppSettings:
     additionalProperties: false
-    description: Optional local llama.cpp server for topic classification and grounded
-      answers.
+    description: Optional local llama.cpp server for grounded answers.
     properties:
       enabled:
         default: false
-        description: If false, classification is fully deterministic
+        description: If false, answers are extracted directly from retrieved sources
         title: Enabled
         type: boolean
       base_url:
@@ -46,18 +45,12 @@ $defs:
         type: string
       timeout_seconds:
         default: 8.0
-        description: HTTP timeout; on timeout the API falls back to keyword scoring
+        description: HTTP timeout; on timeout the API extracts an answer from retrieved
+          sources
         exclusiveMinimum: 0
         maximum: 120
         title: Timeout Seconds
         type: number
-      max_tokens:
-        default: 24
-        description: Maximum output tokens for topic classification
-        exclusiveMinimum: 0
-        maximum: 8192
-        title: Max Tokens
-        type: integer
       answer_max_tokens:
         default: 192
         description: Maximum output tokens for a grounded answer
@@ -106,12 +99,6 @@ properties:
       are allowed. Specify as a regex: `https://.*.innohassle.ru`'
     title: Cors Allow Origin Regex
     type: string
-  knowledge_dir:
-    default: data
-    description: Directory with topic_catalog.json, relative to the backend working
-      directory
-    title: Knowledge Dir
-    type: string
   knowledge_memvid_path:
     default: data/knowledge.mv2
     description: Path to the teammate-produced vector Memvid knowledge base
@@ -122,8 +109,8 @@ properties:
     description: Local semantic retrieval configuration
   llama_cpp:
     $ref: '#/$defs/LlamaCppSettings'
-    description: Local llama.cpp classifier. Disabled by default; the API never calls
-      OpenAI/Gemini/Claude.
+    description: Local llama.cpp answer generator. Disabled by default; the API never
+      calls OpenAI/Gemini/Claude.
 required:
 - database_uri
 title: Settings

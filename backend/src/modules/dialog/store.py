@@ -28,11 +28,8 @@ class ConversationState(BaseSchema):
     revision: int = 0
     closed: bool = False
     status: DialogStatus | None = None
-    topic_id: str | None = None
     line: SupportLine | None = None
     reason: str | None = None
-    failed_clarifications: int = 0
-    pending_option_ids: list[str] = Field(default_factory=list)
     citations: list[StoredCitation] = Field(default_factory=list)
     messages: list[StoredMessage] = Field(default_factory=list)
     updated_at: dtm.datetime = Field(default_factory=utcnow)

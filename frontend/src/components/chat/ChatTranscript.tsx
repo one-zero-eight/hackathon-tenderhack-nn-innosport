@@ -1,8 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { LuLoaderCircle, LuSparkles } from 'react-icons/lu'
-import type { Chat, ClarificationAnswer, ClarificationRequest } from '@/features/chat/types'
+import type { Chat } from '@/features/chat/types'
 import ChatOutline from './ChatOutline'
-import ClarificationCard from './ClarificationCard'
 import MarkdownMessage from './MarkdownMessage'
 
 export interface ChatTranscriptHandle {
@@ -13,11 +12,10 @@ interface ChatTranscriptProps {
   chat: Chat
   busy?: boolean
   afterMessages?: ReactNode
-  onAnswer?: (request: ClarificationRequest, answer: ClarificationAnswer) => Promise<boolean>
   onNearBottomChange?: (nearBottom: boolean) => void
 }
 
-const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onAnswer, onNearBottomChange }, ref) => {
+const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onNearBottomChange }, ref) => {
   const [activeMessage, setActiveMessage] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -126,9 +124,6 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                     <div className="text-ui-body bg-surface-2 rounded-2xl rounded-tr-md px-5 py-3 leading-7 break-words whitespace-pre-wrap">{message.content}</div>
                   )}
                   {message.kind === 'handoff' && chat.handoff?.simulated && <p className="text-foreground/45 text-ui-small mt-2">Демонстрация: реальная заявка не отправлена, связь со специалистом не установлена.</p>}
-                  {message.clarification && (
-                    <ClarificationCard request={message.clarification} answered={messages.some((item) => item.clarificationId === message.clarification?.id)} busy={busy} closed={chat.status === 'closed'} onAnswer={onAnswer} />
-                  )}
                 </article>
               ))}
             </div>
