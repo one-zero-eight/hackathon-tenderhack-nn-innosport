@@ -2,12 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MODEL="${LLAMA_MODEL:-$ROOT/models/qwen2.5-3b-instruct-q4_k_m.gguf}"
+PRESET="${LLAMA_MODELS_PRESET:-$ROOT/models/models.ini}"
 HOST="${LLAMA_HOST:-127.0.0.1}"
 PORT="${LLAMA_PORT:-8081}"
+MODELS_MAX="${LLAMA_MODELS_MAX:-2}"
 
-if [[ ! -f "$MODEL" ]]; then
-  echo "Model not found: $MODEL" >&2
+if [[ ! -f "$PRESET" ]]; then
+  echo "Models preset not found: $PRESET" >&2
   exit 1
 fi
 
@@ -30,6 +31,6 @@ fi
 
 echo "Using $SERVER"
 file "$SERVER"
-exec "$SERVER" --host "$HOST" --port "$PORT" -m "$MODEL" \
-  --ctx-size 2048 --parallel 1 --threads 8 --threads-batch 8 \
-  --gpu-layers 99 --flash-attn on --temp 0
+cd "$ROOT"
+exec "$SERVER" --host "$HOST" --port "$PORT" \
+  --models-preset "$PRESET" --models-max "$MODELS_MAX" --models-autoload
