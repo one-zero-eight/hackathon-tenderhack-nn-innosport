@@ -37,7 +37,7 @@ export function canFeedback(chat: Chat): boolean {
 }
 
 export function canContactSpecialist(chat: Chat): boolean {
-  return chat.status === 'open' && !chat.handoff && Boolean(chat.offerSpecialist)
+  return chat.status === 'open' && !chat.handoff
 }
 
 export function closeChat(chat: Chat, noticeId: string, now: string): Chat {

@@ -25,6 +25,7 @@ dependencies = [
     "fastexcel>=0.21.0",
     "pypdf>=5.1.0",
     "memvid-sdk==2.0.160",
+    "markdown-it-py>=4.2.0",
 ]
 
 [tool.pytest.ini_options]

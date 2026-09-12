@@ -6,6 +6,19 @@ knowledge_memvid_path: data/knowledge.mv2
 knowledge_search:
   embedding_model: mxbai-embed-large
   ollama_base_url: http://127.0.0.1:11434
+audit:
+  max_tokens: 4096
+  email:
+    enabled: false # Enable after filling SMTP settings in local settings.yaml
+    host: ''
+    port: 465
+    security: ssl # ssl (465) or starttls (587); TLS is required
+    username: ''
+    password: '' # SMTP app password; never commit real credentials
+    sender: null # Sender email address
+    recipient: null # Report recipient email address
+    send_at: '09:00:00'
+    timezone: Europe/Moscow
 model_provider: llama_cpp # llama_cpp | mlx
 llama_cpp:
   enabled: false

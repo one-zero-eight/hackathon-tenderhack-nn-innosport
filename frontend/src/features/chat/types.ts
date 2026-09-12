@@ -1,4 +1,4 @@
-import type { SchemaCitation, SchemaSupportLine } from '../../api/types.ts'
+import type { SchemaCitation, SchemaSpecialistContact, SchemaSupportLine } from '../../api/types.ts'
 
 export interface ClarificationRequest {
   id: string
@@ -82,7 +82,8 @@ export interface ChatReply {
 export interface ChatTransport {
   create?: (signal: AbortSignal) => Promise<{ id: string }>
   send: (messages: readonly ChatMessage[], signal: AbortSignal, chatId?: string, onText?: (text: string) => void, onTool?: (tool: ChatToolCall) => void) => Promise<ChatReply>
-  requestSpecialist?: (chat: Chat, signal: AbortSignal) => Promise<SpecialistResponse>
+  previewSpecialist?: (chatId: string, signal: AbortSignal) => Promise<{ dialogId: string; line: SchemaSupportLine }>
+  requestSpecialist?: (chat: Chat, signal: AbortSignal, contact: SchemaSpecialistContact) => Promise<SpecialistResponse>
   submitFeedback?: (chatId: string, rating: FeedbackRating, comment: string, signal: AbortSignal) => Promise<ChatFeedback>
   delete?: (chatId: string, signal: AbortSignal) => Promise<void>
   deleteAll?: (signal: AbortSignal) => Promise<void>

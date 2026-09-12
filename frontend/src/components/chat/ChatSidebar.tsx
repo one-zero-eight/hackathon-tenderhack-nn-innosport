@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { LuMessageSquare, LuPlus, LuSearch, LuTrash2 } from 'react-icons/lu'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/input'
@@ -60,12 +61,10 @@ export default function ChatSidebar({
               <section key={group}>
                 <h2 className="text-foreground/45 text-ui-small mb-2 px-3 font-medium">{group}</h2>
                 {items.map((chat) => (
-                  <div
-                    key={chat.id}
-                    className={`flex w-full items-center rounded-xl ${activeId === chat.id ? 'bg-background font-medium shadow-sm' : 'text-foreground/65 hover:bg-background/70'}`}
-                  >
-                    <button
-                      type="button"
+                  <div key={chat.id} className={`flex w-full items-center rounded-xl ${activeId === chat.id ? 'bg-background font-medium shadow-sm' : 'text-foreground/65 hover:bg-background/70'}`}>
+                    <Link
+                      to="/tickets/$dialogId"
+                      params={{ dialogId: chat.id }}
                       aria-current={activeId === chat.id ? 'page' : undefined}
                       title={chat.title}
                       onClick={() => onSelect(chat.id)}
@@ -80,7 +79,7 @@ export default function ChatSidebar({
                           <span className="text-foreground/45 text-ui-small mt-1 block truncate">{chat.preview}</span>
                         ) : null}
                       </span>
-                    </button>
+                    </Link>
                     <button
                       type="button"
                       aria-label={`Удалить обращение «${chat.title}»`}

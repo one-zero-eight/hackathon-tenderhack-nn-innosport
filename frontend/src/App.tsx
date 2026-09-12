@@ -1,8 +1,17 @@
-import AdminPage from '@/components/admin/AdminPage'
-import ChatPage from '@/components/chat/ChatPage'
+import { createRouter, RouterProvider } from '@tanstack/react-router'
+import { routeTree } from '@/routeTree.gen'
+
+const router = createRouter({
+  routeTree,
+  trailingSlash: 'never',
+})
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
 
 export default function App() {
-  const pathname = window.location.pathname.replace(/\/+$/, '') || '/'
-  if (pathname === '/admin') return <AdminPage />
-  return <ChatPage />
+  return <RouterProvider router={router} />
 }

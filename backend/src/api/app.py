@@ -1,10 +1,13 @@
 __all__ = ["app"]
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.requests import Request
 from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi_derive_responses import AutoDeriveResponsesAPIRoute
 from fastapi_swagger import patch_fastapi
 from pydantic import ValidationError
@@ -40,6 +43,11 @@ app = FastAPI(
 )
 app.router.route_class = AutoDeriveResponsesAPIRoute
 patch_fastapi(app)
+app.mount(
+    "/staticfiles",
+    StaticFiles(directory=Path(__file__).resolve().parents[2] / "staticfiles"),
+    name="staticfiles",
+)
 
 
 @app.exception_handler(RequestValidationError)

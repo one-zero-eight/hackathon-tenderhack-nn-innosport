@@ -2,7 +2,7 @@ import datetime as dtm
 from typing import Annotated, Literal
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import Field, StringConstraints, model_validator
 
 from src.config_schema import LlamaCppSettings, MlxSettings, ModelProvider, Settings
@@ -81,6 +81,19 @@ class AuditResponse(BaseSchema):
     dialog_ids: list[str]
     ratings: AuditRatings
     generated_at: dtm.datetime
+
+
+class AuditEmailResponse(BaseSchema):
+    period_start: dtm.datetime
+    period_end: dtm.datetime
+    dialog_count: int
+    sent_at: dtm.datetime
+
+
+@router.post("/audits/email")
+async def send_audit_email(request: Request) -> AuditEmailResponse:
+    """Generate and email an audit of feedback saved in the last 24 hours."""
+    return await request.app.state.audit_email_service.send_now()
 
 
 async def _complete_audit(

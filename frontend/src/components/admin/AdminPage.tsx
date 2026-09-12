@@ -1,10 +1,7 @@
-import { useState } from 'react'
+import { Link, Outlet, useMatch } from '@tanstack/react-router'
 import { LuCheck, LuClock3, LuMessageSquare } from 'react-icons/lu'
 import { $api } from '@/api'
 import Button from '@/components/ui/Button'
-import ChatTranscript from '@/components/chat/ChatTranscript'
-import { chatFromDialogView } from '@/features/chat/dialog-map'
-import AdminAuditPanel from './AdminAuditPanel'
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
@@ -14,96 +11,96 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
 })
 
 export default function AdminPage() {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [mode, setMode] = useState<'chat' | 'audit'>('chat')
-  const listQuery = $api.useQuery('get', '/dialogs', { params: { query: { limit: 500 } } })
+  const auditActive = Boolean(useMatch({ from: '/admin/audit', shouldThrow: false }))
+  const listQuery = $api.useQuery('get', '/dialogs', { params: { query: { limit: 500 } } }, { enabled: !auditActive })
   const dialogs = listQuery.data ?? []
-  const selectedDialog = dialogs.find((dialog) => dialog.id === selectedId) ?? dialogs[0]
-  const dialogQuery = $api.useQuery(
-    'get',
-    '/dialogs/{dialog_id}',
-    { params: { path: { dialog_id: selectedDialog?.id ?? '' } } },
-    { enabled: mode === 'chat' && Boolean(selectedDialog) },
-  )
-  const chat = selectedDialog && dialogQuery.data?.id === selectedDialog.id ? chatFromDialogView(dialogQuery.data) : null
 
   return (
     <main className="bg-background text-foreground h-dvh overflow-hidden p-4">
       <h1 className="sr-only">Админ-панель обращений</h1>
-      <div className="mx-auto grid h-full max-w-[1600px] grid-rows-[minmax(0,2fr)_minmax(0,3fr)] gap-4 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1">
-        <aside aria-labelledby="admin-appeals-title" className="border-border bg-surface flex min-h-0 flex-col overflow-hidden rounded-2xl border">
-          <header className="border-border shrink-0 border-b px-4 py-4">
-            <h2 id="admin-appeals-title" className="text-ui-title font-semibold">
-              Список обращений
-            </h2>
-          </header>
-          <nav aria-label="Обращения пользователей" className="min-h-0 flex-1 overflow-y-auto p-2">
-            {listQuery.isPending && <p role="status" className="text-foreground/50 p-3">Загружаем обращения…</p>}
-            {listQuery.isError && (
-              <div role="alert" className="space-y-3 p-3">
-                <p className="text-error">Не удалось загрузить обращения.</p>
-                <Button variant="outline" size="sm" disabled={listQuery.isFetching} onClick={() => void listQuery.refetch()}>Повторить</Button>
-              </div>
-            )}
-            {listQuery.isSuccess && dialogs.length === 0 && <p className="text-foreground/50 p-3">Обращений пока нет.</p>}
-            <ul className="space-y-1">
-              {dialogs.map((dialog) => {
-                const active = mode === 'chat' && dialog.id === selectedDialog?.id
-                return (
-                  <li key={dialog.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedId(dialog.id)
-                        setMode('chat')
-                      }}
-                      aria-current={active ? 'page' : undefined}
-                      className={`focus-visible:ring-primary w-full cursor-pointer rounded-xl border px-3 py-3 text-left outline-none transition-colors focus-visible:ring-2 ${active ? 'border-primary/25 bg-primary/5' : 'border-transparent hover:border-border hover:bg-surface-2'}`}
-                    >
-                      <span className="flex items-center gap-2 font-medium">
-                        <LuMessageSquare className="text-foreground/40 size-4 shrink-0" />
-                        <span className="truncate" title={dialog.title}>{dialog.title}</span>
-                      </span>
-                      <span className="text-foreground/65 text-ui-small mt-1 block truncate">{dialog.preview}</span>
-                      <span className="text-foreground/45 text-ui-small mt-2 flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-1">
-                          {dialog.closed ? <LuCheck className="size-3.5" /> : <LuClock3 className="size-3.5" />}
-                          {dialog.closed ? 'Завершено' : 'Открыто'}
-                        </span>
-                        <time dateTime={dialog.updated_at}>{dateFormatter.format(new Date(dialog.updated_at))}</time>
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-            {dialogs.length === 500 && <p className="text-foreground/50 text-ui-small p-3">Показаны последние 500 обращений.</p>}
+      <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-4">
+        <header className="border-border flex shrink-0 flex-wrap items-center justify-between gap-x-6 border-b">
+          <nav aria-label="Разделы админки" className="flex gap-6">
+            <Link
+              to="/admin"
+              activeOptions={{ exact: true }}
+              aria-current={!auditActive ? 'page' : undefined}
+              className={`focus-visible:ring-primary -mb-px border-b-2 px-1 py-3 text-sm font-medium outline-none focus-visible:ring-2 ${!auditActive ? 'border-primary text-primary' : 'text-foreground/60 hover:text-foreground border-transparent'}`}
+            >
+              Обращения
+            </Link>
+            <Link
+              to="/admin/audit"
+              activeProps={{ className: 'border-primary text-primary' }}
+              inactiveProps={{ className: 'border-transparent text-foreground/60 hover:text-foreground' }}
+              className="focus-visible:ring-primary -mb-px border-b-2 px-1 py-3 text-sm font-medium outline-none focus-visible:ring-2"
+            >
+              Аудит
+            </Link>
           </nav>
-          <footer className="border-border shrink-0 border-t p-3">
-            <Button variant="primary" className="w-full" aria-pressed={mode === 'audit'} onClick={() => setMode('audit')}>Начать аудит</Button>
-          </footer>
-        </aside>
+          <Link to="/" className="text-foreground/60 hover:text-foreground focus-visible:ring-primary text-ui-small rounded py-3 outline-none focus-visible:ring-2">
+            На главную
+          </Link>
+        </header>
+        <div className={auditActive ? 'flex min-h-0 flex-1 flex-col' : 'grid min-h-0 flex-1 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] gap-4 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1'}>
+          {!auditActive && (
+            <aside aria-labelledby="admin-appeals-title" className="border-border bg-surface flex min-h-0 flex-col overflow-hidden rounded-2xl border">
+              <header className="border-border shrink-0 border-b px-4 py-4">
+                <h2 id="admin-appeals-title" className="text-ui-title font-semibold">
+                  Список обращений
+                </h2>
+              </header>
+              <nav aria-label="Обращения пользователей" className="min-h-0 flex-1 overflow-y-auto p-2">
+                {listQuery.isPending && (
+                  <p role="status" className="text-foreground/50 p-3">
+                    Загружаем обращения…
+                  </p>
+                )}
+                {listQuery.isError && (
+                  <div role="alert" className="space-y-3 p-3">
+                    <p className="text-error">Не удалось загрузить обращения.</p>
+                    <Button variant="outline" size="sm" disabled={listQuery.isFetching} onClick={() => void listQuery.refetch()}>
+                      Повторить
+                    </Button>
+                  </div>
+                )}
+                {listQuery.isSuccess && dialogs.length === 0 && <p className="text-foreground/50 p-3">Обращений пока нет.</p>}
+                <ul className="space-y-1">
+                  {dialogs.map((dialog) => (
+                    <li key={dialog.id}>
+                      <Link
+                        to="/admin/tickets/$dialogId"
+                        params={{ dialogId: dialog.id }}
+                        activeOptions={{ exact: true }}
+                        activeProps={{ className: 'border-primary/25 bg-primary/5' }}
+                        inactiveProps={{ className: 'border-transparent hover:border-border hover:bg-surface-2' }}
+                        className="focus-visible:ring-primary block w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition-colors outline-none focus-visible:ring-2"
+                      >
+                        <span className="flex items-center gap-2 font-medium">
+                          <LuMessageSquare className="text-foreground/40 size-4 shrink-0" />
+                          <span className="truncate" title={dialog.title}>
+                            {dialog.title}
+                          </span>
+                        </span>
+                        <span className="text-foreground/65 text-ui-small mt-1 block truncate">{dialog.preview}</span>
+                        <span className="text-foreground/45 text-ui-small mt-2 flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1">
+                            {dialog.closed ? <LuCheck className="size-3.5" /> : <LuClock3 className="size-3.5" />}
+                            {dialog.closed ? 'Завершено' : 'Открыто'}
+                          </span>
+                          <time dateTime={dialog.updated_at}>{dateFormatter.format(new Date(dialog.updated_at))}</time>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                {dialogs.length === 500 && <p className="text-foreground/50 text-ui-small p-3">Показаны последние 500 обращений.</p>}
+              </nav>
+            </aside>
+          )}
 
-        {mode === 'audit' ? (
-          <AdminAuditPanel />
-        ) : (
-          <section aria-label="История обращения" className="border-border bg-surface relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border">
-            {!selectedDialog ? (
-              <p className="text-foreground/50 m-auto p-6 text-center">Выберите обращение для просмотра истории.</p>
-            ) : dialogQuery.isPending ? (
-              <p role="status" className="text-foreground/50 m-auto p-6 text-center">Загружаем историю…</p>
-            ) : dialogQuery.isError ? (
-              <div role="alert" className="m-auto space-y-3 p-6 text-center">
-                <p className="text-error">Не удалось загрузить историю обращения.</p>
-                <Button variant="outline" size="sm" disabled={dialogQuery.isFetching} onClick={() => void dialogQuery.refetch()}>Повторить</Button>
-              </div>
-            ) : chat && chat.messages.length > 0 ? (
-              <ChatTranscript key={chat.id} chat={chat} />
-            ) : (
-              <p className="text-foreground/50 m-auto p-6 text-center">В обращении пока нет сообщений.</p>
-            )}
-          </section>
-        )}
+          <Outlet />
+        </div>
       </div>
     </main>
   )

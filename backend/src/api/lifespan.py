@@ -1,7 +1,7 @@
 __all__ = ["lifespan"]
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from beanie import init_beanie
 from fastapi import FastAPI
@@ -11,6 +11,7 @@ from pymongo.errors import ConnectionFailure
 
 from src.config import settings
 from src.logging_ import logger
+from src.modules.audit_email import AuditEmailService
 from src.modules.dialog.factory import build_dialog_service, build_llama_client_from_settings
 from src.storages.mongo import document_models
 
@@ -47,8 +48,19 @@ async def lifespan(_app: FastAPI):
         use_mongo=True,
         llama_client=llama_client,
     )
-    yield
-
-    # -- Application shutdown --
-    await llama_client.aclose()
-    motor_client.close()
+    email_service = AuditEmailService(settings)
+    _app.state.audit_email_service = email_service
+    email_task = (
+        asyncio.create_task(email_service.run_daily(), name="daily-audit-email")
+        if settings.audit.email.enabled
+        else None
+    )
+    try:
+        yield
+    finally:
+        if email_task is not None:
+            email_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await email_task
+        await llama_client.aclose()
+        motor_client.close()

@@ -13,6 +13,7 @@ from memvid_sdk.embeddings import EmbeddingProvider
 from src.logging_ import logger
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import ABBREVIATIONS, normalize_text, root_ru, significant_stems
+from src.modules.dialog.sources import pdf_source_path
 
 SENTENCE_RE = re.compile(r'(?<=[.!?])\s+(?=[А-ЯЁA-Z«"\d])')
 SOURCE_RE = re.compile(r'\bsource:\s*"([^"]+)"', re.IGNORECASE)
@@ -414,7 +415,7 @@ def _hit_to_chunk(hit: dict[str, Any]) -> Chunk | None:
         section=" ".join(clean_source_text(re.sub(r"#{1,6}\s*", "", section)).split())
         or section_number
         or "Раздел не указан",
-        path=path,
+        path=pdf_source_path(document, text) or path,
     )
 
 

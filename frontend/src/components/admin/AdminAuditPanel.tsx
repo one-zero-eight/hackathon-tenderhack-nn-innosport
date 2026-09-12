@@ -18,6 +18,9 @@ export default function AdminAuditPanel() {
   const id = useId()
   const queryClient = useQueryClient()
   const audit = $api.useMutation('post', '/admin/audits', { retry: false })
+  const email = $api.useMutation('post', '/admin/audits/email', { retry: false })
+  const sendingEmail = useRef(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
   const [selection, setSelection] = useState<'interval' | 'count'>('interval')
   const [interval, setInterval] = useState('day')
   const [count, setCount] = useState('30')
@@ -29,6 +32,20 @@ export default function AdminAuditPanel() {
   const validCount = Number.isInteger(Number(count)) && Number(count) >= 1 && Number(count) <= 100
   const result = audit.data
   const fieldClassName = 'border-border bg-background text-ui-body focus-visible:ring-primary w-full rounded-lg border px-3 py-2 outline-none focus-visible:ring-2'
+
+  async function sendEmail() {
+    if (sendingEmail.current) return
+    sendingEmail.current = true
+    setEmailError(null)
+    email.reset()
+    try {
+      await email.mutateAsync({})
+    } catch (failure) {
+      setEmailError(auditError(failure))
+    } finally {
+      sendingEmail.current = false
+    }
+  }
 
   async function runAudit() {
     if (running.current || (selection === 'count' && !validCount)) return
@@ -135,8 +152,13 @@ export default function AdminAuditPanel() {
           )}
           <p className="text-foreground/50 text-ui-small">LLM получит переписку, оценки и комментарии. Выводы модели требуют проверки и относятся только к выбранным обращениям.</p>
         </fieldset>
-        <footer className="border-border shrink-0 border-t p-5">
-          <Button variant="primary" className="w-full" disabled={busy || (selection === 'count' && !validCount)} onClick={() => void runAudit()}>{busy ? 'Аудит выполняется…' : 'Провести аудит'}</Button>
+        <footer className="border-border shrink-0 space-y-3 border-t p-5">
+          <Button variant="primary" className="w-full" disabled={busy || email.isPending || (selection === 'count' && !validCount)} onClick={() => void runAudit()}>{busy ? 'Аудит выполняется…' : 'Провести аудит'}</Button>
+          <Button variant="outline" className="w-full" disabled={busy || email.isPending} onClick={() => void sendEmail()}>{email.isPending ? 'Формируем и отправляем…' : 'Отправить сейчас на почту'}</Button>
+          <p className="text-foreground/50 text-ui-small">На почту из настроек сервера отправится новый аудит оценок за последние 24 часа, независимо от фильтров выше.</p>
+          {email.isPending && <p role="status" className="text-foreground/60 text-ui-small">Готовим суточный отчёт. Это может занять несколько минут…</p>}
+          {emailError && <p role="alert" className="text-error text-ui-small">{emailError}</p>}
+          {email.isSuccess && <p role="status" className="text-foreground/70 text-ui-small">Отчёт передан почтовому серверу. Обращений: {email.data.dialog_count}. Время: {new Date(email.data.sent_at).toLocaleString('ru-RU')}.</p>}
         </footer>
       </aside>
     </div>

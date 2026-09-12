@@ -6,6 +6,19 @@ knowledge_memvid_path: data/knowledge.mv2
 knowledge_search:
   embedding_model: mxbai-embed-large
   ollama_base_url: http://host.docker.internal:11434
+audit:
+  max_tokens: 4096
+  email:
+    enabled: false
+    host: ''
+    port: 465
+    security: ssl
+    username: ''
+    password: '' # Never put real credentials in this tracked file; mount local settings.yaml instead
+    sender: null
+    recipient: null
+    send_at: '09:00:00'
+    timezone: Europe/Moscow
 model_provider: llama_cpp # llama_cpp | mlx
 llama_cpp:
   enabled: true

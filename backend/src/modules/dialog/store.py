@@ -4,7 +4,14 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from src.modules.dialog.schemas import Clarification, DialogFeedback, DialogStatus, SupportLine, ToolCall
+from src.modules.dialog.schemas import (
+    Clarification,
+    DialogFeedback,
+    DialogStatus,
+    SpecialistContact,
+    SupportLine,
+    ToolCall,
+)
 from src.pydantic_base import BaseSchema
 
 
@@ -34,6 +41,7 @@ class ConversationState(BaseSchema):
     line: SupportLine | None = None
     reason: str | None = None
     feedback: DialogFeedback | None = None
+    specialist_contact: SpecialistContact | None = None
     citations: list[StoredCitation] = Field(default_factory=list)
     messages: list[StoredMessage] = Field(default_factory=list)
     updated_at: dtm.datetime = Field(default_factory=utcnow)

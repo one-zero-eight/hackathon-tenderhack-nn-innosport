@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.api import docs
+from src.modules.dialog.classification import DialogClassification, classify_dialog
 from src.modules.dialog.schemas import (
     DialogDeleteResult,
     DialogFeedback,
@@ -11,10 +12,14 @@ from src.modules.dialog.schemas import (
     DialogListItem,
     DialogResponse,
     DialogStreamEvent,
+    DialogSummary,
     DialogView,
+    EscalationPreview,
     MessageCreate,
+    SpecialistContact,
 )
 from src.modules.dialog.service import DialogClosedError, DialogService
+from src.modules.dialog.summary import summarize_dialog
 
 router = APIRouter(tags=["dialog"])
 docs.TAGS_INFO.append(
@@ -59,6 +64,23 @@ async def get_dialog(dialog_id: str, service: DialogServiceDep) -> DialogView:
     return await service.get(dialog_id)
 
 
+@router.get("/dialogs/{dialog_id}/summary")
+async def get_dialog_summary(dialog_id: str, service: DialogServiceDep) -> DialogSummary:
+    """Summarize the complete saved transcript without modifying the appeal."""
+    from src.config import settings
+
+    dialog = await service.get(dialog_id)
+    return await summarize_dialog(dialog, settings)
+
+
+@router.get("/dialogs/{dialog_id}/classification")
+async def get_dialog_classification(dialog_id: str, service: DialogServiceDep) -> DialogClassification:
+    """Classify the saved transcript using catalog topics without modifying the appeal."""
+    from src.config import settings
+
+    return await classify_dialog(await service.get(dialog_id), settings)
+
+
 @router.put("/dialogs/{dialog_id}/feedback")
 async def submit_feedback(dialog_id: str, payload: DialogFeedbackCreate, service: DialogServiceDep) -> DialogFeedback:
     return await service.submit_feedback(dialog_id, payload)
@@ -99,10 +121,19 @@ async def stream_message(dialog_id: str, payload: MessageCreate, service: Dialog
     )
 
 
-@router.post("/dialogs/{dialog_id}/escalate", response_model=DialogResponse)
-async def request_specialist(dialog_id: str, service: DialogServiceDep):
-    """Select a specialist; only this action determines L1 versus L2."""
+@router.get("/dialogs/{dialog_id}/escalation-preview")
+async def escalation_preview(dialog_id: str, service: DialogServiceDep) -> EscalationPreview:
+    """Preview the specialist line without modifying the appeal."""
     try:
-        return await service.request_specialist(dialog_id)
+        return await service.escalation_preview(dialog_id)
+    except DialogClosedError as exc:
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+
+
+@router.post("/dialogs/{dialog_id}/escalate")
+async def request_specialist(dialog_id: str, payload: SpecialistContact, service: DialogServiceDep) -> DialogResponse:
+    """Save contact details and hand the appeal to the selected specialist line."""
+    try:
+        return await service.request_specialist(dialog_id, payload)
     except DialogClosedError as exc:
         return JSONResponse(status_code=exc.status_code, content=exc.detail)

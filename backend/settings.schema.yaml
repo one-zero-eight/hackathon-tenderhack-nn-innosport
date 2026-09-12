@@ -1,8 +1,71 @@
 $schema: https://json-schema.org/draft-07/schema
 $defs:
+  AuditEmailSettings:
+    additionalProperties: false
+    description: SMTP delivery and daily schedule; credentials belong in local settings.yaml.
+    properties:
+      enabled:
+        default: false
+        description: Enable daily delivery; manual delivery only requires complete
+          SMTP settings
+        title: Enabled
+        type: boolean
+      host:
+        default: ''
+        title: Host
+        type: string
+      port:
+        default: 465
+        maximum: 65535
+        minimum: 1
+        title: Port
+        type: integer
+      security:
+        default: ssl
+        enum:
+        - ssl
+        - starttls
+        title: Security
+        type: string
+      username:
+        default: ''
+        title: Username
+        type: string
+      password:
+        default: ''
+        format: password
+        title: Password
+        type: string
+        writeOnly: true
+      sender:
+        anyOf:
+        - format: email
+          type: string
+        - type: 'null'
+        default: null
+        title: Sender
+      recipient:
+        anyOf:
+        - format: email
+          type: string
+        - type: 'null'
+        default: null
+        title: Recipient
+      send_at:
+        default: 09:00:00
+        description: Daily wall-clock time in the configured timezone
+        format: time
+        title: Send At
+        type: string
+      timezone:
+        default: Europe/Moscow
+        title: Timezone
+        type: string
+    title: AuditEmailSettings
+    type: object
   AuditSettings:
     additionalProperties: false
-    description: LLM output budget for administrative feedback analysis.
+    description: Administrative feedback analysis and email delivery.
     properties:
       max_tokens:
         default: 4096
@@ -12,6 +75,8 @@ $defs:
         minimum: 512
         title: Max Tokens
         type: integer
+      email:
+        $ref: '#/$defs/AuditEmailSettings'
     title: AuditSettings
     type: object
   Environment:

@@ -41,6 +41,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dialogs/{dialog_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dialog Summary
+         * @description Summarize the complete saved transcript without modifying the appeal.
+         */
+        get: operations["get_dialog_summary_dialogs__dialog_id__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dialogs/{dialog_id}/classification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dialog Classification
+         * @description Classify the saved transcript using catalog topics without modifying the appeal.
+         */
+        get: operations["get_dialog_classification_dialogs__dialog_id__classification_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dialogs/{dialog_id}/feedback": {
         parameters: {
             query?: never;
@@ -92,6 +132,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dialogs/{dialog_id}/escalation-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Escalation Preview
+         * @description Preview the specialist line without modifying the appeal.
+         */
+        get: operations["escalation_preview_dialogs__dialog_id__escalation_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dialogs/{dialog_id}/escalate": {
         parameters: {
             query?: never;
@@ -103,9 +163,29 @@ export interface paths {
         put?: never;
         /**
          * Request Specialist
-         * @description Select a specialist; only this action determines L1 versus L2.
+         * @description Save contact details and hand the appeal to the selected specialist line.
          */
         post: operations["request_specialist_dialogs__dialog_id__escalate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/audits/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Audit Email
+         * @description Generate and email an audit of feedback saved in the last 24 hours.
+         */
+        post: operations["send_audit_email_admin_audits_email_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -143,6 +223,26 @@ export interface components {
             /** Messages */
             messages: components["schemas"]["AuditMessage"][];
             feedback: components["schemas"]["AuditFeedback"];
+        };
+        /** AuditEmailResponse */
+        AuditEmailResponse: {
+            /**
+             * Period Start
+             * Format: date-time
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date-time
+             */
+            period_end: string;
+            /** Dialog Count */
+            dialog_count: number;
+            /**
+             * Sent At
+             * Format: date-time
+             */
+            sent_at: string;
         };
         /** AuditFeedback */
         AuditFeedback: {
@@ -211,6 +311,24 @@ export interface components {
             options: string[];
             /** Id */
             id: string;
+        };
+        /** DialogClassification */
+        DialogClassification: {
+            /** Subtopic Id */
+            subtopic_id: string | null;
+            /** Reason */
+            reason: string;
+            /** Topic */
+            topic: string | null;
+            /** Subtopic */
+            subtopic: string | null;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Dialog Updated At */
+            dialog_updated_at: string | null;
         };
         /** DialogDeleteResult */
         DialogDeleteResult: {
@@ -306,6 +424,7 @@ export interface components {
             /** Reason */
             reason?: string | null;
             feedback?: components["schemas"]["DialogFeedback"] | null;
+            specialist_contact?: components["schemas"]["SpecialistContact"] | null;
             /** Updated At */
             updated_at?: string | null;
         };
@@ -332,6 +451,20 @@ export interface components {
             /** Detail */
             detail?: string | null;
         };
+        /** DialogSummary */
+        DialogSummary: {
+            /** User Request */
+            user_request: string;
+            /** Remaining Questions */
+            remaining_questions: string[];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Dialog Updated At */
+            dialog_updated_at: string | null;
+        };
         /** DialogView */
         DialogView: {
             /** Id */
@@ -353,10 +486,15 @@ export interface components {
             /** Reason */
             reason?: string | null;
             feedback?: components["schemas"]["DialogFeedback"] | null;
+            specialist_contact?: components["schemas"]["SpecialistContact"] | null;
             /** Updated At */
             updated_at?: string | null;
             /** Messages */
             messages?: components["schemas"]["DialogMessage"][];
+        };
+        /** EscalationPreview */
+        EscalationPreview: {
+            line: components["schemas"]["SupportLine"];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -369,6 +507,18 @@ export interface components {
             content: string;
             /** Clarification Id */
             clarification_id?: string | null;
+        };
+        /** SpecialistContact */
+        SpecialistContact: {
+            /** Inn */
+            inn: string;
+            /** Organization Name */
+            organization_name: string;
+            /**
+             * Contact Email
+             * Format: email
+             */
+            contact_email: string;
         };
         /**
          * SupportLine
@@ -413,6 +563,7 @@ export interface components {
     pathItems: never;
 }
 export type SchemaAuditDialog = components['schemas']['AuditDialog'];
+export type SchemaAuditEmailResponse = components['schemas']['AuditEmailResponse'];
 export type SchemaAuditFeedback = components['schemas']['AuditFeedback'];
 export type SchemaAuditMessage = components['schemas']['AuditMessage'];
 export type SchemaAuditRatings = components['schemas']['AuditRatings'];
@@ -420,6 +571,7 @@ export type SchemaAuditRequest = components['schemas']['AuditRequest'];
 export type SchemaAuditResponse = components['schemas']['AuditResponse'];
 export type SchemaCitation = components['schemas']['Citation'];
 export type SchemaClarification = components['schemas']['Clarification'];
+export type SchemaDialogClassification = components['schemas']['DialogClassification'];
 export type SchemaDialogDeleteResult = components['schemas']['DialogDeleteResult'];
 export type SchemaDialogFeedback = components['schemas']['DialogFeedback'];
 export type SchemaDialogFeedbackCreate = components['schemas']['DialogFeedbackCreate'];
@@ -428,9 +580,12 @@ export type SchemaDialogMessage = components['schemas']['DialogMessage'];
 export type SchemaDialogResponse = components['schemas']['DialogResponse'];
 export type SchemaDialogStatus = components['schemas']['DialogStatus'];
 export type SchemaDialogStreamEvent = components['schemas']['DialogStreamEvent'];
+export type SchemaDialogSummary = components['schemas']['DialogSummary'];
 export type SchemaDialogView = components['schemas']['DialogView'];
+export type SchemaEscalationPreview = components['schemas']['EscalationPreview'];
 export type SchemaHttpValidationError = components['schemas']['HTTPValidationError'];
 export type SchemaMessageCreate = components['schemas']['MessageCreate'];
+export type SchemaSpecialistContact = components['schemas']['SpecialistContact'];
 export type SchemaSupportLine = components['schemas']['SupportLine'];
 export type SchemaToolCall = components['schemas']['ToolCall'];
 export type SchemaToolStatus = components['schemas']['ToolStatus'];
@@ -570,6 +725,68 @@ export interface operations {
             };
         };
     };
+    get_dialog_summary_dialogs__dialog_id__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dialog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialogSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dialog_classification_dialogs__dialog_id__classification_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dialog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialogClassification"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     submit_feedback_dialogs__dialog_id__feedback_put: {
         parameters: {
             query?: never;
@@ -675,7 +892,7 @@ export interface operations {
             };
         };
     };
-    request_specialist_dialogs__dialog_id__escalate_post: {
+    escalation_preview_dialogs__dialog_id__escalation_preview_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -685,6 +902,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EscalationPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_specialist_dialogs__dialog_id__escalate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dialog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecialistContact"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -702,6 +954,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_audit_email_admin_audits_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEmailResponse"];
                 };
             };
         };

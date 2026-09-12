@@ -2,7 +2,7 @@ import datetime as dtm
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import Field, StringConstraints, field_validator
+from pydantic import EmailStr, Field, StringConstraints, field_validator
 
 from src.pydantic_base import BaseSchema
 
@@ -75,6 +75,16 @@ class DialogFeedback(DialogFeedbackCreate):
         return value.replace(tzinfo=dtm.UTC) if value.tzinfo is None else value
 
 
+class SpecialistContact(BaseSchema):
+    inn: Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^(?:[0-9]{10}|[0-9]{12})$")]
+    organization_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+    contact_email: EmailStr
+
+
+class EscalationPreview(BaseSchema):
+    line: SupportLine
+
+
 class DialogResponse(BaseSchema):
     id: str
     reply: str
@@ -86,6 +96,7 @@ class DialogResponse(BaseSchema):
     closed: bool = False
     reason: str | None = None
     feedback: DialogFeedback | None = None
+    specialist_contact: SpecialistContact | None = None
     updated_at: dtm.datetime | None = None
 
 
@@ -122,6 +133,16 @@ class DialogMessage(BaseSchema):
 
 class DialogView(DialogResponse):
     messages: list[DialogMessage] = Field(default_factory=list)
+
+
+class DialogSummaryContent(BaseSchema):
+    user_request: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+    remaining_questions: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]]
+
+
+class DialogSummary(DialogSummaryContent):
+    generated_at: dtm.datetime
+    dialog_updated_at: dtm.datetime | None
 
 
 class DialogDeleteResult(BaseSchema):

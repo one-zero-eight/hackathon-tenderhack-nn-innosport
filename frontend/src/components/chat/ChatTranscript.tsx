@@ -5,6 +5,8 @@ import { pendingClarificationMessageId } from '@/features/chat/model'
 import ClarificationCard from './ClarificationCard'
 import ChatOutline from './ChatOutline'
 import MarkdownMessage from './MarkdownMessage'
+import PdfSourceDialog from './PdfSourceDialog'
+import { pdfSourceUrl } from '@/features/chat/sources'
 
 export interface ChatTranscriptHandle {
   scrollToBottom: () => void
@@ -83,6 +85,7 @@ function ToolActivity({ message }: { message: ChatMessage }) {
 
 const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onNearBottomChange, onAnswerClarification }, ref) => {
   const [activeMessage, setActiveMessage] = useState('')
+  const [pdfSource, setPdfSource] = useState<{ chatId: string; citation: NonNullable<ChatMessage['citations']>[number] } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const previousChat = useRef(chat.id)
@@ -152,6 +155,7 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
   return (
     <>
       <ChatOutline messages={messages} activeId={activeMessage} onNavigate={navigate} />
+      {pdfSource?.chatId === chat.id && <PdfSourceDialog citation={pdfSource.citation} onClose={() => setPdfSource(null)} />}
       <div
         ref={scrollRef}
         onScroll={() => {
@@ -205,10 +209,17 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                               {message.citations?.map((citation, citationIndex) => (
                                 <li key={`${citation.path}:${citation.section}:${citationIndex}`} className="flex min-w-0 items-start gap-2 leading-5">
                                   <LuFileText aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 opacity-70" />
-                                  <span className="min-w-0 break-words">
-                                    <span>{citation.document.trim() || citation.path}</span>
+                                  <button
+                                    type="button"
+                                    disabled={!pdfSourceUrl(citation.path)}
+                                    onClick={() => setPdfSource({ chatId: chat.id, citation })}
+                                    className="focus-visible:outline-primary min-w-0 rounded text-left break-words enabled:cursor-pointer enabled:hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2"
+                                    aria-haspopup="dialog"
+                                  >
+                                    <span className={pdfSourceUrl(citation.path) ? 'underline decoration-current/30 underline-offset-4' : ''}>{citation.document.replace(/_/g, ' ').trim() || citation.path}</span>
                                     {citation.section.trim() && <span className="mt-0.5 block text-gray-500 dark:text-gray-400">{citation.section}</span>}
-                                  </span>
+                                    {pdfSourceUrl(citation.path) && <span className="text-primary mt-0.5 block">Страница {citation.path.split('#page=')[1]}</span>}
+                                  </button>
                                 </li>
                               ))}
                             </ul>

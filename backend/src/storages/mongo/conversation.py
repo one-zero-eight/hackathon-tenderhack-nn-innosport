@@ -5,7 +5,14 @@ from typing import ClassVar
 from beanie import PydanticObjectId
 from pydantic import Field
 
-from src.modules.dialog.schemas import Clarification, DialogFeedback, DialogStatus, SupportLine, ToolCall
+from src.modules.dialog.schemas import (
+    Clarification,
+    DialogFeedback,
+    DialogStatus,
+    SpecialistContact,
+    SupportLine,
+    ToolCall,
+)
 from src.modules.dialog.store import (
     ConversationConflictError,
     ConversationState,
@@ -38,6 +45,7 @@ class ConversationSchema(BaseSchema):
     line: SupportLine | None = None
     reason: str | None = None
     feedback: DialogFeedback | None = None
+    specialist_contact: SpecialistContact | None = None
     citations: list[ConversationCitationSchema] = Field(default_factory=list)
     messages: list[ConversationMessageSchema] = Field(default_factory=list)
     updated_at: dtm.datetime | None = None
@@ -48,7 +56,7 @@ class Conversation(ConversationSchema, CustomDocument):
         name = "conversations"
         keep_nulls = False
         max_nesting_depth = 1
-        indexes: ClassVar[list[str]] = ["updated_at"]
+        indexes: ClassVar[list[str]] = ["updated_at", "feedback.submitted_at"]
 
 
 def _document_updated_at(document: Conversation) -> dtm.datetime:
@@ -75,6 +83,7 @@ def document_to_state(document: Conversation) -> ConversationState:
         line=document.line,
         reason=document.reason,
         feedback=document.feedback,
+        specialist_contact=document.specialist_contact,
         citations=[
             StoredCitation(
                 document=item.document,
@@ -138,6 +147,9 @@ class MongoConversationStore:
                     "line": state.line,
                     "reason": state.reason,
                     "feedback": state.feedback.model_dump(mode="python") if state.feedback else None,
+                    "specialist_contact": state.specialist_contact.model_dump(mode="python")
+                    if state.specialist_contact
+                    else None,
                     "updated_at": state.updated_at,
                     "citations": [
                         ConversationCitationSchema(

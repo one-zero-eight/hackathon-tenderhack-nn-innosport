@@ -25,6 +25,8 @@ from src.modules.dialog.schemas import (
     DialogStatus,
     DialogStreamEvent,
     DialogView,
+    EscalationPreview,
+    SpecialistContact,
     SupportLine,
     ToolCall,
     ToolStatus,
@@ -174,18 +176,23 @@ class DialogService:
         response.updated_at = state.updated_at
         return response
 
-    async def request_specialist(self, dialog_id: str) -> DialogResponse:
+    @staticmethod
+    def _specialist_line(state: ConversationState) -> SupportLine:
+        history = "\n".join(item.content for item in state.messages if item.role == "user")
+        return SupportLine.L2 if is_l2_request(history) else SupportLine.L1
+
+    async def escalation_preview(self, dialog_id: str) -> EscalationPreview:
         state = await self._require(dialog_id)
         if state.closed:
             raise DialogClosedError(self._response(state, CLOSED_REPLY))
-        user_messages = [item.content for item in state.messages if item.role == "user"]
-        if not user_messages:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="At least one user message is required before selecting a specialist",
-            )
-        history = "\n".join(user_messages)
-        line = SupportLine.L2 if is_l2_request(history) else SupportLine.L1
+        return EscalationPreview(line=self._specialist_line(state))
+
+    async def request_specialist(self, dialog_id: str, payload: SpecialistContact) -> DialogResponse:
+        state = (await self._require(dialog_id)).model_copy(deep=True)
+        if state.closed:
+            raise DialogClosedError(self._response(state, CLOSED_REPLY))
+        line = self._specialist_line(state)
+        state.specialist_contact = payload.model_copy(deep=True)
         response = self._finish(
             state,
             reply=L2_REPLY if line == SupportLine.L2 else L1_REPLY,
@@ -196,6 +203,7 @@ class DialogService:
         )
         state.messages.append(StoredMessage(role="assistant", content=response.reply))
         await self._save(state)
+        response.updated_at = state.updated_at
         return response
 
     async def _save(self, state: ConversationState) -> None:
@@ -412,6 +420,7 @@ class DialogService:
             closed=state.closed,
             reason=state.reason,
             feedback=state.feedback,
+            specialist_contact=state.specialist_contact,
             updated_at=state.updated_at,
         )
 

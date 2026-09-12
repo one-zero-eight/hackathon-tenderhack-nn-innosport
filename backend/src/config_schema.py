@@ -1,8 +1,11 @@
+import datetime as dtm
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator, model_validator
 
 
 class Environment(StrEnum):
@@ -53,11 +56,61 @@ class MlxSettings(SettingBaseModel):
     temperature: float = Field(default=0.0, ge=0, le=2)
 
 
+class AuditEmailSettings(SettingBaseModel):
+    """SMTP delivery and daily schedule; credentials belong in local settings.yaml."""
+
+    enabled: bool = False
+    "Enable daily delivery; manual delivery only requires complete SMTP settings"
+    host: str = ""
+    port: int = Field(default=465, ge=1, le=65535)
+    security: Literal["ssl", "starttls"] = "ssl"
+    username: str = ""
+    password: SecretStr = SecretStr("")
+    sender: EmailStr | None = None
+    recipient: EmailStr | None = None
+    send_at: dtm.time = dtm.time(9, 0)
+    "Daily wall-clock time in the configured timezone"
+    timezone: str = "Europe/Moscow"
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Unknown IANA timezone") from exc
+        return value
+
+    @field_validator("send_at")
+    @classmethod
+    def validate_send_at(cls, value: dtm.time) -> dtm.time:
+        if value.tzinfo is not None:
+            raise ValueError("send_at must be a local time without UTC offset; use timezone")
+        return value
+
+    @property
+    def configured(self) -> bool:
+        return bool(
+            self.host.strip()
+            and self.username.strip()
+            and self.password.get_secret_value()
+            and self.sender
+            and self.recipient
+        )
+
+    @model_validator(mode="after")
+    def validate_enabled(self) -> AuditEmailSettings:
+        if self.enabled and not self.configured:
+            raise ValueError("Daily audit email requires host, username, password, sender and recipient")
+        return self
+
+
 class AuditSettings(SettingBaseModel):
-    """LLM output budget for administrative feedback analysis."""
+    """Administrative feedback analysis and email delivery."""
 
     max_tokens: int = Field(default=4096, ge=512, le=16384)
     "Maximum output tokens for an audit report; independent of short chat answers"
+    email: AuditEmailSettings = Field(default_factory=AuditEmailSettings)
 
 
 class KnowledgeSearchSettings(SettingBaseModel):
