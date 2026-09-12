@@ -12,7 +12,6 @@ from src.modules.dialog.abuse import is_abuse
 from src.modules.dialog.classify import is_capability_question, is_greeting, is_thanks
 from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient, TextCallback, ToolCallback
 from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_answer
-from src.modules.dialog.routing import is_l2_request
 from src.modules.dialog.schemas import (
     Citation,
     Clarification,
@@ -176,22 +175,32 @@ class DialogService:
         response.updated_at = state.updated_at
         return response
 
-    @staticmethod
-    def _specialist_line(state: ConversationState) -> SupportLine:
-        history = "\n".join(item.content for item in state.messages if item.role == "user")
-        return SupportLine.L2 if is_l2_request(history) else SupportLine.L1
+    async def _specialist_line(self, state: ConversationState) -> SupportLine:
+        user_messages = [item.content for item in state.messages if item.role == "user"]
+        if not user_messages:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="At least one user message is required before selecting a specialist",
+            )
+        line = await self.llama_client.classify_line("\n".join(user_messages))
+        if line is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Line classification is unavailable",
+            )
+        return line
 
     async def escalation_preview(self, dialog_id: str) -> EscalationPreview:
         state = await self._require(dialog_id)
         if state.closed:
             raise DialogClosedError(self._response(state, CLOSED_REPLY))
-        return EscalationPreview(line=self._specialist_line(state))
+        return EscalationPreview(line=await self._specialist_line(state))
 
     async def request_specialist(self, dialog_id: str, payload: SpecialistContact) -> DialogResponse:
         state = (await self._require(dialog_id)).model_copy(deep=True)
         if state.closed:
             raise DialogClosedError(self._response(state, CLOSED_REPLY))
-        line = self._specialist_line(state)
+        line = await self._specialist_line(state)
         state.specialist_contact = payload.model_copy(deep=True)
         response = self._finish(
             state,

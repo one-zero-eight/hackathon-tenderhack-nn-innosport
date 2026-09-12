@@ -8,6 +8,13 @@ from src.modules.dialog.retrieval import KnowledgeRetriever, MemvidKnowledgeRetr
 from src.modules.dialog.service import DialogService
 from src.modules.dialog.store import ConversationStore, MemoryConversationStore
 
+LINE_EXAMPLES_PATH = Path("data/line_question_examples.txt")
+
+
+def _line_examples() -> str:
+    path = LINE_EXAMPLES_PATH if LINE_EXAMPLES_PATH.is_absolute() else Path.cwd() / LINE_EXAMPLES_PATH
+    return path.read_text(encoding="utf-8")
+
 
 def build_llama_client_from_settings(settings: Settings | None = None) -> DialogLlamaClient:
     if settings is None:
@@ -25,6 +32,7 @@ def build_llama_client_from_settings(settings: Settings | None = None) -> Dialog
             max_tool_rounds=mlx.max_tool_rounds,
             temperature=mlx.temperature,
             llama_extensions=False,
+            line_examples=_line_examples(),
         )
     llama = settings.llama_cpp
     if not llama.enabled:
@@ -36,6 +44,7 @@ def build_llama_client_from_settings(settings: Settings | None = None) -> Dialog
         context_tokens=llama.context_tokens,
         max_tool_rounds=llama.max_tool_rounds,
         temperature=llama.temperature,
+        line_examples=_line_examples(),
     )
 
 

@@ -13,7 +13,7 @@ from pydantic_core import from_json
 from src.logging_ import logger
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.retrieval import KnowledgeRetriever, clean_source_text
-from src.modules.dialog.schemas import ClarificationQuestion, ToolCall, ToolStatus
+from src.modules.dialog.schemas import ClarificationQuestion, SupportLine, ToolCall, ToolStatus
 from src.pydantic_base import BaseSchema
 
 AGENT_INSTRUCTIONS = """Ты справочная поддержка Портала поставщиков. Русский язык, обращение на «вы».
@@ -41,6 +41,19 @@ respond kind=answer допустим только по прочитанным и
 Определение не заменяй инструкцией загрузки. Не выдумывай штрафы и отсутствующие шаги.
 Ответ до 1200 символов; краткий Markdown, без лимита количества элементов перечня.
 Уточнения — только через ask_clarification. Не повторяй уже отвеченный вопрос."""
+
+LINE_CLASSIFY_INSTRUCTIONS = (
+    "Определи линию поддержки для обращения. Верни только JSON "
+    '{"line": "L1"} или {"line": "L2"} по правилам и примерам ниже.'
+)
+LINE_CLASSIFY_SCHEMA = {
+    "type": "object",
+    "properties": {"line": {"type": "string", "enum": ["L1", "L2"]}},
+    "required": ["line"],
+    "additionalProperties": False,
+}
+LINE_CLASSIFY_QUESTION_CHARS = 1200
+LINE_CLASSIFY_MAX_TOKENS = 16
 
 
 class AgentReply(BaseSchema):
@@ -76,6 +89,8 @@ class DialogLlamaClient(Protocol):
         on_tool: ToolCallback | None = None,
     ) -> AgentResult | None: ...
 
+    async def classify_line(self, question: str) -> SupportLine | None: ...
+
     async def aclose(self) -> None: ...
 
 
@@ -89,6 +104,9 @@ class NullLlamaClient:
         on_text: TextCallback | None = None,
         on_tool: ToolCallback | None = None,
     ) -> AgentResult | None:
+        return None
+
+    async def classify_line(self, question: str) -> SupportLine | None:
         return None
 
     async def aclose(self) -> None:
@@ -152,6 +170,7 @@ class LlamaCppClient:
         temperature: float = 0.0,
         max_tool_rounds: int = 2,
         llama_extensions: bool = True,
+        line_examples: str = "",
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -160,6 +179,7 @@ class LlamaCppClient:
         self.temperature = temperature
         self.max_tool_rounds = max_tool_rounds
         self.llama_extensions = llama_extensions
+        self.line_examples = line_examples
         # Deliberately wait for the local model; the agent still has a step limit.
         self._client = httpx.AsyncClient(timeout=None)  # noqa: S113
 
@@ -191,6 +211,48 @@ class LlamaCppClient:
         if result is None and tool_calls:
             return AgentResult(reply=None, sources=[], tool_calls=tool_calls)
         return result
+
+    async def classify_line(self, question: str) -> SupportLine | None:
+        text = question[-LINE_CLASSIFY_QUESTION_CHARS:].strip()
+        if not text or not self.line_examples.strip():
+            return None
+        messages = [
+            {"role": "system", "content": f"{LINE_CLASSIFY_INSTRUCTIONS}\n\n{self.line_examples.strip()}"},
+            {"role": "user", "content": text},
+        ]
+        payload: dict = {
+            "model": self.model,
+            "messages": messages,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "support_line",
+                    "strict": True,
+                    "schema": LINE_CLASSIFY_SCHEMA,
+                },
+            },
+            "temperature": 0,
+            "max_tokens": LINE_CLASSIFY_MAX_TOKENS,
+        }
+        if self.llama_extensions:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+        started = tm.monotonic()
+        try:
+            response = await self._client.post(f"{self.base_url}/v1/chat/completions", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+            parsed = json.loads(content) if isinstance(content, str) else content
+            line = parsed["line"]
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError) as exc:
+            logger.warning("Line classify failed: elapsed=%.1fs error=%r", tm.monotonic() - started, exc)
+            return None
+        logger.info("Line classify elapsed=%.1fs line=%s", tm.monotonic() - started, line)
+        if line == SupportLine.L1:
+            return SupportLine.L1
+        if line == SupportLine.L2:
+            return SupportLine.L2
+        return None
 
     async def _run(
         self,
