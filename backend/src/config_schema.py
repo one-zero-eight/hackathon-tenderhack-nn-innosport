@@ -114,10 +114,10 @@ class AuditSettings(SettingBaseModel):
 
 
 class KnowledgeSearchSettings(SettingBaseModel):
-    """Local semantic search settings for the Memvid knowledge base."""
+    """Semantic search settings for the MongoDB-backed knowledge base."""
 
     embedding_model: str = "mxbai-embed-large"
-    "Ollama embedding model used when the Memvid vectors were created"
+    "Ollama embedding model used when the knowledge_chunks vectors were created"
     ollama_base_url: str = "http://127.0.0.1:11434"
     "Local Ollama API used to embed search queries"
 
@@ -132,15 +132,13 @@ class Settings(SettingBaseModel):
     'Prefix for the API path (e.g. "/api/v0")'
     database_uri: SecretStr = Field(
         examples=[
-            "mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin",
-            "mongodb://mongoadmin:secret@db:27017/db?authSource=admin",
+            "mongodb://127.0.0.1:27017/db?directConnection=true",
+            "mongodb://database:27017/db?directConnection=true",
         ]
     )
     "MongoDB database settings"
     cors_allow_origin_regex: str = ".*"
     "Allowed origins for CORS: from which domains requests to the API are allowed. Specify as a regex: `https://.*.innohassle.ru`"
-    knowledge_memvid_path: str = "data/knowledge.mv2"
-    "Path to the teammate-produced vector Memvid knowledge base"
     knowledge_search: KnowledgeSearchSettings = Field(default_factory=KnowledgeSearchSettings)
     "Local semantic retrieval configuration"
     model_provider: ModelProvider = ModelProvider.LLAMA_CPP

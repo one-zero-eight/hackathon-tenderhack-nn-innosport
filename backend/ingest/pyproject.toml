@@ -6,8 +6,9 @@ readme = "README.md"
 authors = [{ name = "mainStorne", email = "dbevzpr@mail.ru" }]
 requires-python = ">=3.14"
 dependencies = [
-    "ipykernel>=7.3.0",
-    "memvid-sdk[langchain]>=2.0.160",
+    "langchain-community>=0.4.2",
+    "langchain-text-splitters>=1.1.2",
+    "pymongo>=4.18.1",
     "pymupdf>=1.28.2",
     "pymupdf4llm>=1.28.2",
 ]

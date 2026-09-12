@@ -1,8 +1,7 @@
 # yaml-language-server: $schema=settings.schema.yaml
 $schema: './settings.schema.yaml'
 environment: development
-database_uri: mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin # replace 127.0.0.1 with db in Docker
-knowledge_memvid_path: data/knowledge.mv2
+database_uri: mongodb://127.0.0.1:27017/db?directConnection=true # replace 127.0.0.1 with database in Docker; single-node replica set needs directConnection to skip internal-hostname discovery
 knowledge_search:
   embedding_model: mxbai-embed-large
   ollama_base_url: http://127.0.0.1:11434

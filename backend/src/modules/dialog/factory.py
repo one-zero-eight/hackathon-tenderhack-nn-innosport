@@ -1,10 +1,9 @@
 from pathlib import Path
 
-from memvid_sdk.embeddings import OllamaEmbeddings
-
 from src.config_schema import ModelProvider, Settings
+from src.modules.dialog.embeddings import OllamaEmbeddings
 from src.modules.dialog.llama import DialogLlamaClient, LlamaCppClient, NullLlamaClient
-from src.modules.dialog.retrieval import KnowledgeRetriever, MemvidKnowledgeRetriever
+from src.modules.dialog.retrieval import KnowledgeRetriever, MongoKnowledgeRetriever
 from src.modules.dialog.service import DialogService
 from src.modules.dialog.store import ConversationStore, MemoryConversationStore
 
@@ -53,24 +52,14 @@ def build_dialog_service(
     store: ConversationStore | None = None,
     retriever: KnowledgeRetriever | None = None,
     llama_client: DialogLlamaClient | None = None,
-    memvid_path: Path | None = None,
     use_mongo: bool = False,
 ) -> DialogService:
     if retriever is None:
         from src.config import settings
 
-        if memvid_path is None:
-            memvid_path = Path(settings.knowledge_memvid_path)
-            if not memvid_path.is_absolute():
-                memvid_path = Path.cwd() / memvid_path
         search = settings.knowledge_search
-        retriever = MemvidKnowledgeRetriever(
-            memvid_path,
-            OllamaEmbeddings(
-                model=search.embedding_model,
-                base_url=search.ollama_base_url,
-            ),
-        )
+        embedder = OllamaEmbeddings(model=search.embedding_model, base_url=search.ollama_base_url)
+        retriever = MongoKnowledgeRetriever(embedder)
     if store is None:
         if use_mongo:
             from src.storages.mongo.conversation import MongoConversationStore

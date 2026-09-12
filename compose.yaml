@@ -32,25 +32,14 @@ services:
     restart: unless-stopped
 
   database:
-    image: mongo:8.0
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: mongoadmin
-      MONGO_INITDB_ROOT_PASSWORD: secret
-    ports:
-      - "27017:27017"
+    image: mongodb/mongodb-atlas-local:latest
     volumes:
-      - mongodb:/data/db
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "mongosh --quiet --eval 'quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)'",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
+      - db:/data/db
+
+    ports:
+      - 27017:27017
     restart: unless-stopped
 
 volumes:
-  mongodb:
+  db:
+  config:

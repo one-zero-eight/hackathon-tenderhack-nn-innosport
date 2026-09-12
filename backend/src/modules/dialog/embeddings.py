@@ -1,19 +1,37 @@
-"""Local Ollama embedding client, used by ingest_documents.py.
+"""Local Ollama embedding client.
 
-Standalone copy of backend/src/modules/dialog/embeddings.py's OllamaEmbeddings —
-duplicated rather than imported so backend/ingest stays independent of the
-backend package (matches how backend/ingest already keeps its own deps).
+Vendored from memvid_sdk.embeddings.OllamaEmbeddings (memvid_sdk is being removed
+along with the rest of the memvid-backed knowledge store) so callers keep the
+same embed_documents/embed_query interface without depending on that package.
 """
 
 import urllib.error
 import urllib.request
 from json import dumps, loads
 
+MODEL_DIMENSIONS = {
+    "nomic-embed-text": 768,
+    "mxbai-embed-large": 1024,
+    "all-minilm": 384,
+    "bge-m3": 1024,
+}
+
 
 class OllamaEmbeddings:
     def __init__(self, model: str = "mxbai-embed-large", base_url: str = "http://127.0.0.1:11434") -> None:
         self._base_url = base_url.strip().rstrip("/") or "http://127.0.0.1:11434"
         self._model = model
+        self._dimension: int | None = None
+
+    @property
+    def dimension(self) -> int:
+        if self._dimension:
+            return self._dimension
+        return MODEL_DIMENSIONS.get(self._model, 768)
+
+    @property
+    def model_name(self) -> str:
+        return self._model
 
     def _post(self, payload: dict) -> dict:
         url = f"{self._base_url}/api/embeddings"
@@ -39,6 +57,8 @@ class OllamaEmbeddings:
         embedding = data.get("embedding")
         if not isinstance(embedding, list) or not embedding:
             raise RuntimeError("Ollama API error: empty embedding returned")
+        if self._dimension is None:
+            self._dimension = len(embedding)
         return embedding
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
@@ -47,6 +67,3 @@ class OllamaEmbeddings:
 
     def embed_query(self, text: str) -> list[float]:
         return self._embed_one(text)
-
-
-embedder = OllamaEmbeddings(model="mxbai-embed-large", base_url="http://localhost:11434")

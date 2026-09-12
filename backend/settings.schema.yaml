@@ -87,11 +87,12 @@ $defs:
     type: string
   KnowledgeSearchSettings:
     additionalProperties: false
-    description: Local semantic search settings for the Memvid knowledge base.
+    description: Semantic search settings for the MongoDB-backed knowledge base.
     properties:
       embedding_model:
         default: mxbai-embed-large
-        description: Ollama embedding model used when the Memvid vectors were created
+        description: Ollama embedding model used when the knowledge_chunks vectors
+          were created
         title: Embedding Model
         type: string
       ollama_base_url:
@@ -223,8 +224,8 @@ properties:
   database_uri:
     description: MongoDB database settings
     examples:
-    - mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin
-    - mongodb://mongoadmin:secret@db:27017/db?authSource=admin
+    - mongodb://127.0.0.1:27017/db?directConnection=true
+    - mongodb://database:27017/db?directConnection=true
     format: password
     title: Database Uri
     type: string
@@ -234,11 +235,6 @@ properties:
     description: 'Allowed origins for CORS: from which domains requests to the API
       are allowed. Specify as a regex: `https://.*.innohassle.ru`'
     title: Cors Allow Origin Regex
-    type: string
-  knowledge_memvid_path:
-    default: data/knowledge.mv2
-    description: Path to the teammate-produced vector Memvid knowledge base
-    title: Knowledge Memvid Path
     type: string
   knowledge_search:
     $ref: '#/$defs/KnowledgeSearchSettings'

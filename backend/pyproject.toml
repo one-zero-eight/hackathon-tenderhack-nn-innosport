@@ -24,7 +24,6 @@ dependencies = [
     "polars>=1.44.2",
     "fastexcel>=0.21.0",
     "pypdf>=5.1.0",
-    "memvid-sdk==2.0.160",
     "markdown-it-py>=4.2.0",
 ]
 
@@ -52,27 +51,27 @@ extend-exclude = ["*.ipynb"]
 force-exclude = true
 lint.preview = true
 lint.extend-select = [
-    "E", # pycodestyle error
-    "I", # isort
-    "N", # pep-8 naming
-    "S", # bandit
-    "UP", # pyupgrade
-    "PL", # pylint
-    "A", # flake8-builtins
-    "DTZ", # flake8-datetimez
-    "ICN", # flake8-import-conventions
+    "E",      # pycodestyle error
+    "I",      # isort
+    "N",      # pep-8 naming
+    "S",      # bandit
+    "UP",     # pyupgrade
+    "PL",     # pylint
+    "A",      # flake8-builtins
+    "DTZ",    # flake8-datetimez
+    "ICN",    # flake8-import-conventions
     "TID251", # flake8-tidy-imports banned-api
 ]
 lint.extend-ignore = [
     "PLC0415", # import-outside-top-level
-    "PLR", # pylint refactor
-    "E501", # line-too-long (handled by formatter)
+    "PLR",     # pylint refactor
+    "E501",    # line-too-long (handled by formatter)
     "PLW1514", # unspecified-encoding in open(...) function
 ]
 lint.unfixable = ["F401"] # unused-import — report only, do not remove on fix
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
-    "S101", # assert is standard in pytest
+    "S101",    # assert is standard in pytest
     "PLC1901", # exact empty-string assertions distinguish "" from None
     "PLC2701", # focused tests may import internal helpers
 ]
@@ -81,7 +80,9 @@ lint.unfixable = ["F401"] # unused-import — report only, do not remove on fix
 "src/prepare.py" = ["S404", "S603", "S607"]
 "src/logging_.py" = ["S101"] # FastAPI internal invariant, not input validation
 "src/storages/mongo/*.py" = ["PLC2701"] # shared internal __base__ module
-"src/storages/mongo/__base__.py" = ["PLW3201"] # Pydantic's documented schema hook
+"src/storages/mongo/__base__.py" = [
+    "PLW3201",
+] # Pydantic's documented schema hook
 [tool.ruff.lint.flake8-builtins]
 ignorelist = ["id"]
 [tool.ruff.lint.flake8-import-conventions]

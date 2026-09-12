@@ -20,6 +20,7 @@ class Chunk(BaseSchema):
     document: str
     section: str
     path: str
+    order: int = 0
 
 
 class KnowledgeBase(BaseModel):

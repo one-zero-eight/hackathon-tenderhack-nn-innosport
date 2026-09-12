@@ -1,31 +1,27 @@
 import asyncio
-import math
 import re
-from collections import Counter
 from html import unescape
 from itertools import pairwise
-from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any, Protocol
 
-from memvid_sdk import MemvidError, use
-from memvid_sdk.embeddings import EmbeddingProvider
+from beanie import PydanticObjectId
+from pydantic import ValidationError
 
 from src.logging_ import logger
+from src.modules.dialog.embeddings import OllamaEmbeddings
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import ABBREVIATIONS, normalize_text, root_ru, significant_stems
-from src.modules.dialog.sources import pdf_source_path
+from src.storages.mongo.knowledge import TEXT_INDEX_NAME, VECTOR_INDEX_NAME, KnowledgeChunk
 
 SENTENCE_RE = re.compile(r'(?<=[.!?])\s+(?=[А-ЯЁA-Z«"\d])')
-SOURCE_RE = re.compile(r'\bsource:\s*"([^"]+)"', re.IGNORECASE)
-SECTION_RE = re.compile(r'\bsection:\s*"([^"]+)"', re.IGNORECASE)
-SECTION_TITLE_RE = re.compile(r'\bsection_title:\s*"([^"]+)"', re.IGNORECASE)
-PATH_RE = re.compile(r'\bpath:\s*"([^"]+)"', re.IGNORECASE)
-SERIALIZED_METADATA_RE = re.compile(
-    r"\s+title:\s.*?(?=\s+(?:labels?|path|section|section_title|source|topic_id):)",
-    re.IGNORECASE,
-)
 MIN_RETRIEVAL_SCORE = 2.0
 SEARCH_TIMEOUT_SECONDS = 15.0
+# How many candidates each Mongo search stage contributes to the pool that gets
+# reranked in Python (below). numCandidates is oversampled relative to limit,
+# as Atlas Vector Search recommends, since it just controls recall internally.
+CANDIDATE_LIMIT = 50
+VECTOR_NUM_CANDIDATES = 400
 # Expand language, not support topics: the subject (including «поставщик»)
 # must remain in the query even when it also appears in the portal name.
 SEARCH_SYNONYMS = (
@@ -60,7 +56,7 @@ def _content_roots(text: str) -> list[str]:
 
 def clean_source_text(text: str) -> str:
     """Remove PDF decoration without changing instructions or Markdown tables."""
-    text = unescape(text).replace("\u00a0", " ").replace("\u00ad", "")
+    text = unescape(text).replace(" ", " ").replace("­", "")
     text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
     text = re.sub(r"<br\s*/?>", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"</?(?:mark|u|span|p|div|strong|em|b|i)(?:\s[^>]*)?>", "", text, flags=re.IGNORECASE)
@@ -191,15 +187,56 @@ def score_chunk(query: str, chunk: Chunk) -> float:
     )
 
 
-def _read_cached_section(chunks: list[Chunk], chunk_id: str, limit: int) -> list[Chunk]:
-    """Read forward from a known frame without opening a user-supplied path."""
-    anchor = next((chunk for chunk in chunks if chunk.id == chunk_id), None)
-    if anchor is None or limit <= 0:
-        return []
-    section = [chunk for chunk in chunks if (chunk.document, chunk.section) == (anchor.document, anchor.section)]
-    section.sort(key=lambda chunk: (0, int(chunk.id)) if chunk.id.isdigit() else (1, chunk.id))
-    start = next(index for index, chunk in enumerate(section) if chunk.id == chunk_id)
-    return section[start : start + limit]
+def _root_windows(text: str) -> list[list[str]]:
+    roots = _roots(text)
+    return [roots[index : index + 16] for index in range(0, len(roots), 8)]
+
+
+def _object_id(value: str) -> PydanticObjectId | None:
+    if re.fullmatch(r"[0-9a-fA-F]{24}", value) is None:
+        return None
+    return PydanticObjectId(value)
+
+
+def _build_chunk(
+    *, doc_id: str, text: str, document: str, section_number: str, section_title: str, path: str, order: int
+) -> Chunk | None:
+    cleaned = clean_source_text(text.strip())
+    document = document.strip()
+    path = path.strip()
+    # if not cleaned or not document or not path:
+    #     return None
+    section = " ".join(part for part in (section_number.strip(), section_title.strip()) if part) or "Раздел не указан"
+    return Chunk(id=doc_id, text=cleaned, document=document, section=section, path=path, order=order)
+
+
+def _chunk_from_raw(doc: dict[str, Any]) -> Chunk | None:
+    path = str(doc.get("path") or "")
+    # Older/legacy documents (predating the document/section_number split)
+    # only carry a path like "documents/<name>.pdf" - derive document from it
+    # instead of dropping the chunk, so find() still works against that data.
+    document = str(doc.get("document") or "") or (PurePosixPath(path).name if path else "")
+    return _build_chunk(
+        doc_id=str(doc.get("_id", "")),
+        text=str(doc.get("text") or ""),
+        document=document,
+        section_number=str(doc.get("section_number") or ""),
+        section_title=str(doc.get("section_title") or ""),
+        path=path,
+        order=int(doc.get("order") or 0),
+    )
+
+
+def _chunk_from_document(row: KnowledgeChunk) -> Chunk | None:
+    return _build_chunk(
+        doc_id=str(row.id),
+        text=row.text,
+        document=row.document,
+        section_number=row.section_number,
+        section_title=row.section_title,
+        path=row.path,
+        order=row.order,
+    )
 
 
 class KnowledgeRetriever(Protocol):
@@ -221,202 +258,182 @@ class MemoryKnowledgeRetriever:
         return [chunk for _score, chunk in ranked[:limit]]
 
     async def read_section(self, chunk_id: str, limit: int = 6) -> list[Chunk]:
-        return _read_cached_section(self.chunks, chunk_id, limit)
+        anchor = next((chunk for chunk in self.chunks if chunk.id == chunk_id), None)
+        if anchor is None or limit <= 0:
+            return []
+        section = [c for c in self.chunks if (c.document, c.section) == (anchor.document, anchor.section)]
+        section.sort(key=lambda c: c.order)
+        start = next(index for index, c in enumerate(section) if c.id == chunk_id)
+        return section[start : start + limit]
 
 
-class MemvidKnowledgeRetriever:
-    """Combine existing vectors with Russian BM25 over the small read-only corpus."""
+class MongoKnowledgeRetriever:
+    """Semantic ($vectorSearch) + lexical (Atlas $search) candidate generation,
+    reranked with the Russian root-stemmed subject scorer below."""
 
-    def __init__(self, path: Path, embedder: EmbeddingProvider) -> None:
-        if not path.is_file():
-            raise FileNotFoundError(
-                f"Memvid knowledge base not found: {path}. "
-                "Place the teammate-produced file there or update knowledge_memvid_path."
-            )
-        self.path = path
+    def __init__(self, embedder: OllamaEmbeddings) -> None:
         self.embedder = embedder
-        self.memory = use("basic", str(path), read_only=True, enable_lex=True, enable_vec=True)
-        self._frame_count = self.memory.stats()["active_frame_count"]
-        self._chunks: dict[str, Chunk] = {}
-        self._term_counts: dict[str, Counter[str]] = {}
-        self._document_frequency: Counter[str] = Counter()
-        self._average_length = 1.0
-        self._lock = asyncio.Lock()
-        self._search_task: asyncio.Task[list[Chunk]] | None = None
 
     async def find(self, query: str, limit: int = 3) -> list[Chunk]:
         if limit <= 0 or not _query_roots(query):
             return []
         try:
             async with asyncio.timeout(SEARCH_TIMEOUT_SECONDS):
-                await self._lock.acquire()
-                # Cancellation cannot stop a running thread. Transfer lock ownership
-                # to the shielded task so a timed-out query never exposes live caches
-                # or the Memvid handle to another concurrent reader/search.
-                self._search_task = asyncio.create_task(self._find_locked(query, limit))
-                return await asyncio.shield(self._search_task)
+                return await self._find(query, limit)
         except TimeoutError:
-            logger.warning("Memvid retrieval exceeded %.1fs", SEARCH_TIMEOUT_SECONDS)
+            logger.warning("Mongo knowledge retrieval exceeded %.1fs", SEARCH_TIMEOUT_SECONDS)
             return []
 
-    async def _find_locked(self, query: str, limit: int) -> list[Chunk]:
-        try:
-            return await asyncio.to_thread(self._find_sync, query, limit)
-        except MemvidError, RuntimeError, TimeoutError:
-            logger.exception("Memvid semantic retrieval failed")
-            return []
-        finally:
-            self._lock.release()
+    async def _find(self, query: str, limit: int) -> list[Chunk]:
+        collection = KnowledgeChunk.get_motor_collection()
+        query_vector = await asyncio.to_thread(self.embedder.embed_query, query)
 
-    async def read_section(self, chunk_id: str, limit: int = 6) -> list[Chunk]:
-        if limit <= 0:
-            return []
-        try:
-            async with asyncio.timeout(SEARCH_TIMEOUT_SECONDS), self._lock:
-                return _read_cached_section(list(self._chunks.values()), chunk_id, limit)
-        except TimeoutError:
-            logger.warning("Memvid section read exceeded %.1fs", SEARCH_TIMEOUT_SECONDS)
-            return []
+        vector_pipeline = [
+            {
+                "$vectorSearch": {
+                    "index": VECTOR_INDEX_NAME,
+                    "path": "embedding",
+                    "queryVector": query_vector,
+                    "numCandidates": VECTOR_NUM_CANDIDATES,
+                    "limit": CANDIDATE_LIMIT,
+                }
+            },
+            {"$project": {"embedding": 0}},
+        ]
+        text_pipeline = [
+            {"$search": {"index": TEXT_INDEX_NAME, "text": {"query": query, "path": ["text", "section_title"]}}},
+            {"$limit": CANDIDATE_LIMIT},
+            {"$project": {"embedding": 0}},
+        ]
 
-    def _find_sync(self, query: str, limit: int) -> list[Chunk]:
-        if limit <= 0 or not _query_roots(query):
-            return []
-        # The shipped index has only ~800 frames. Its lexical analyzer matches
-        # inflections literally, and sem top-24 misses whole relevant sections.
-        # On first use fetch every existing vector's text with the real query;
-        # cache a stemmed BM25 index, without writing/reembedding the .mv2 file.
-        print(self._frame_count if not self._chunks else max(limit * 12, 64))
-        result = self.memory.find(
-            query,
-            k=self._frame_count if not self._chunks else max(limit * 12, 64),
-            mode="sem",
-            snippet_chars=16000,
-            embedder=self.embedder,
+        vector_hits, text_hits = await asyncio.gather(
+            collection.aggregate(vector_pipeline).to_list(length=CANDIDATE_LIMIT),
+            collection.aggregate(text_pipeline).to_list(length=CANDIDATE_LIMIT),
         )
+
+        raw_by_id: dict[str, dict[str, Any]] = {}
+        chunks: dict[str, Chunk] = {}
         semantic_ranks: dict[str, int] = {}
-        for rank, hit in enumerate(result.get("hits", []), start=1):
-            chunk = _hit_to_chunk(hit)
+        lexical_ranks: dict[str, int] = {}
+        for rank, doc in enumerate(vector_hits, start=1):
+            chunk = _chunk_from_raw(doc)
             if chunk is None:
                 continue
+            chunks[chunk.id] = chunk
+            raw_by_id[chunk.id] = doc
             semantic_ranks[chunk.id] = rank
-            if chunk.id not in self._chunks:
-                self._chunks[chunk.id] = chunk
-                counts = Counter(_content_roots(chunk.text))
-                self._term_counts[chunk.id] = counts
-                self._document_frequency.update(counts.keys())
-        self._average_length = sum(counts.total() for counts in self._term_counts.values()) / max(len(self._chunks), 1)
+        for rank, doc in enumerate(text_hits, start=1):
+            chunk = _chunk_from_raw(doc)
+            if chunk is None:
+                continue
+            chunks.setdefault(chunk.id, chunk)
+            raw_by_id.setdefault(chunk.id, doc)
+            lexical_ranks[chunk.id] = rank
+
         query_roots = _query_roots(query)
         ranked: list[tuple[float, Chunk]] = []
         seen: set[str] = set()
-        for chunk in self._chunks.values():
-            lexical_score = score_chunk(query, chunk)
-            if lexical_score < MIN_RETRIEVAL_SCORE:
+        for chunk in chunks.values():
+            subject_score = score_chunk(query, chunk)
+            if subject_score < MIN_RETRIEVAL_SCORE:
                 continue
             key = normalize_text(chunk.text)
             if key in seen:
                 continue
             seen.add(key)
-            counts = self._term_counts[chunk.id]
-            bm25 = 0.0
-            for root in query_roots:
-                frequency = counts[root]
-                if not frequency:
-                    continue
-                document_frequency = self._document_frequency[root]
-                inverse_frequency = math.log(
-                    1 + (len(self._chunks) - document_frequency + 0.5) / (document_frequency + 0.5)
-                )
-                denominator = frequency + 1.5 * (0.25 + 0.75 * counts.total() / self._average_length)
-                bm25 += GENERIC_ROOT_WEIGHTS.get(root, 1.0) * inverse_frequency * frequency * 2.5 / denominator
-            # Query coverage and local proximity prevent generic search instructions
-            # or a repeated contract keyword from outranking the requested subject.
-            coverage = len(query_roots & counts.keys()) / len(query_roots)
+            coverage = len(query_roots & set(_content_roots(chunk.text))) / len(query_roots)
             proximity = max(
                 (len(query_roots & set(window)) for window in _root_windows(chunk.text)),
                 default=0,
             ) / len(query_roots)
-            semantic_score = 1 / (1 + semantic_ranks.get(chunk.id, self._frame_count) / 20)
-            score = bm25 + lexical_score + 4 * coverage**2 + 3 * proximity**2 + semantic_score
+            # Rank-decay both native Mongo signals the same way the old memvid
+            # semantic rank was decayed, since neither's raw score is directly
+            # comparable to the hand-rolled subject_score/coverage/proximity terms.
+            semantic_score = 1 / (1 + semantic_ranks.get(chunk.id, CANDIDATE_LIMIT * 4) / 20)
+            lexical_score = 1 / (1 + lexical_ranks.get(chunk.id, CANDIDATE_LIMIT * 4) / 20)
+            score = semantic_score + lexical_score + subject_score + 4 * coverage**2 + 3 * proximity**2
             ranked.append((score, chunk))
         ranked.sort(key=lambda item: item[0], reverse=True)
         if not ranked:
             return []
+
         # Small ingestion chunks split lists mid-answer. Keep the strongest
         # passage with its immediate same-section continuations, even when a
         # continuation does not repeat the user's subject (e.g. portal features).
         best_score, anchor = ranked[0]
-        chunks = [anchor]
-        if anchor.id.isdigit():
-            for offset in range(1, limit):
-                continuation = self._chunks.get(str(int(anchor.id) + offset))
-                if (
-                    continuation is None
-                    or continuation.document != anchor.document
-                    or continuation.section != anchor.section
-                ):
-                    break
-                chunks.append(continuation)
+        selected = [anchor]
+        selected_ids = {anchor.id}
+        for continuation in await self._fetch_continuations(raw_by_id[anchor.id], limit):
+            if len(selected) >= limit:
+                break
+            if continuation.id not in selected_ids:
+                selected.append(continuation)
+                selected_ids.add(continuation.id)
         # Preserve relevance order across sections, never global frame order.
-        selected_ids = {chunk.id for chunk in chunks}
         for score, chunk in ranked[1:]:
-            if len(chunks) >= limit or score < best_score * 0.85:
+            if len(selected) >= limit or score < best_score * 0.85:
                 break
             if chunk.id not in selected_ids:
-                chunks.append(chunk)
+                selected.append(chunk)
                 selected_ids.add(chunk.id)
-        return chunks[:limit]
+        return selected[:limit]
 
+    @staticmethod
+    async def _fetch_continuations(anchor_doc: dict[str, Any], limit: int) -> list[Chunk]:
+        if limit <= 1:
+            return []
+        rows = await (
+            KnowledgeChunk.find(
+                {
+                    "document": anchor_doc.get("document"),
+                    "section_number": anchor_doc.get("section_number", ""),
+                    "section_title": anchor_doc.get("section_title", ""),
+                    "order": {"$gt": anchor_doc.get("order", 0)},
+                }
+            )
+            .sort("+order")
+            .limit(limit - 1)
+            .to_list()
+        )
+        continuations: list[Chunk] = []
+        expected = int(anchor_doc.get("order", 0)) + 1
+        for row in rows:
+            if row.order != expected:
+                break
+            chunk = _chunk_from_document(row)
+            if chunk is not None:
+                continuations.append(chunk)
+            expected += 1
+        return continuations
 
-def _root_windows(text: str) -> list[list[str]]:
-    roots = _roots(text)
-    return [roots[index : index + 16] for index in range(0, len(roots), 8)]
-
-
-def _metadata(hit: dict[str, Any]) -> dict[str, Any]:
-    value = hit.get("metadata")
-    return value if isinstance(value, dict) else {}
-
-
-def _hit_to_chunk(hit: dict[str, Any]) -> Chunk | None:
-    raw_text = str(hit.get("text") or hit.get("snippet") or "").strip()
-    if not raw_text:
-        return None
-    marker = SERIALIZED_METADATA_RE.search(raw_text)
-    text = clean_source_text(raw_text[: marker.start()] if marker else raw_text)
-    if not text:
-        return None
-    metadata = _metadata(hit)
-    document = str(metadata.get("document") or metadata.get("source") or "").strip()
-    section_number = str(metadata.get("section") or "").strip()
-    section_title = str(metadata.get("section_title") or "").strip()
-    path = str(metadata.get("path") or "").strip()
-
-    # The existing notebook used the "langchain" adapter, which may serialize
-    # metadata into the text instead of returning a metadata object.
-    if not document and (match := SOURCE_RE.search(raw_text)):
-        document = match.group(1)
-    if not section_number and (match := SECTION_RE.search(raw_text)):
-        section_number = match.group(1)
-    if not section_title and (match := SECTION_TITLE_RE.search(raw_text)):
-        section_title = match.group(1)
-    if not path and (match := PATH_RE.search(raw_text)):
-        path = match.group(1)
-    if document and not path:
-        path = f"docs/{document}"
-    if not document or not path:
-        return None
-    section = " ".join(part for part in (section_number, section_title) if part)
-    if not section:
-        section = str(hit.get("title") or "Раздел не указан")
-    return Chunk(
-        id=str(hit.get("frame_id") or hit.get("uri") or ""),
-        text=text,
-        document=document,
-        section=" ".join(clean_source_text(re.sub(r"#{1,6}\s*", "", section)).split())
-        or section_number
-        or "Раздел не указан",
-        path=pdf_source_path(document, text) or path,
-    )
+    async def read_section(self, chunk_id: str, limit: int = 6) -> list[Chunk]:
+        if limit <= 0:
+            return []
+        object_id = _object_id(chunk_id)
+        if object_id is None:
+            return []
+        try:
+            async with asyncio.timeout(SEARCH_TIMEOUT_SECONDS):
+                anchor = await KnowledgeChunk.get(object_id)
+                if anchor is None:
+                    return []
+                rows = await (
+                    KnowledgeChunk.find(
+                        {
+                            "document": anchor.document,
+                            "section_number": anchor.section_number,
+                            "section_title": anchor.section_title,
+                            "order": {"$gte": anchor.order},
+                        }
+                    )
+                    .sort("+order")
+                    .limit(limit)
+                    .to_list()
+                )
+                return [chunk for row in rows if (chunk := _chunk_from_document(row)) is not None]
+        except TimeoutError:
+            logger.warning("Mongo knowledge section read exceeded %.1fs", SEARCH_TIMEOUT_SECONDS)
+            return []
 
 
 def is_complete_prose(text: str) -> bool:

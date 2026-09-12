@@ -24,13 +24,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Production stage. Copy only runtime deps that were installed in the Builder stage.
 FROM python:3.14-slim-bookworm AS production
 
-ENV PYTHONUNBUFFERED=1 \
-    GLIBC_TUNABLES=glibc.rtld.optional_static_tls=0x20000
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libatomic1 \
-    libstdc++6 \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONUNBUFFERED=1
 
 # Copy the applicant from the builder
 COPY --from=builder /app /app
@@ -45,8 +39,7 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY --chown=uv:uv . /app
-RUN chmod +x /app/scripts/docker-entrypoint.sh \
- && cp /app/scripts/docker_sitecustomize.py /app/.venv/lib/python3.14/site-packages/sitecustomize.py
+RUN chmod +x /app/scripts/docker-entrypoint.sh
 
 USER uv
 
