@@ -8,7 +8,7 @@ type Rating = 'complete' | 'partial' | 'irrelevant'
 const ratings: { value: Rating; label: string }[] = [
   { value: 'complete', label: 'Ответил полностью' },
   { value: 'partial', label: 'Неполный ответ' },
-  { value: 'irrelevant', label: 'Ответ нерелевантен' },
+  { value: 'irrelevant', label: 'Ответ не по теме' },
 ]
 
 export default function BotFeedbackCard({
