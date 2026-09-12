@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { LuMessageSquare, LuPlus, LuSearch, LuTrash2 } from 'react-icons/lu'
+import { LuLayoutDashboard, LuMessageSquare, LuPlus, LuSearch, LuTrash2 } from 'react-icons/lu'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/input'
 import type { Chat } from '@/features/chat/types'
@@ -49,7 +49,7 @@ export default function ChatSidebar({
           <label htmlFor={searchId} className="sr-only">
             Найти обращение
           </label>
-          <LuSearch className="text-foreground/40 pointer-events-none absolute top-3 left-3 size-4" />
+          <LuSearch className="text-foreground/40 pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
           <Input id={searchId} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти обращение" className="border-transparent bg-transparent py-2.5 pl-9" />
         </div>
       </div>
@@ -99,11 +99,15 @@ export default function ChatSidebar({
         {error && <p className="text-error text-ui-body px-3">{error}</p>}
         {!loading && !filtered.length && <p className="text-foreground/50 text-ui-body px-3">Обращения не найдены</p>}
       </nav>
-      <div className="border-border mx-4 space-y-4 border-t py-5">
-        <Button variant="ghost" color="error" size="sm" className="flex w-full items-center justify-center gap-2" disabled={busy || !canDeleteAll} onClick={onDeleteAll}>
-          <LuTrash2 className="size-4" />
+      <div className="border-border mx-4 space-y-1 border-t py-3">
+        <Button variant="ghost" color="error" size="sm" className="flex w-full items-center justify-center gap-1.5 px-2 py-1 text-xs font-medium" disabled={busy || !canDeleteAll} onClick={onDeleteAll}>
+          <LuTrash2 className="size-3.5" />
           Удалить все обращения
         </Button>
+        <Link to="/admin" className="text-foreground/60 hover:text-foreground hover:bg-background/70 focus-visible:ring-primary flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-2">
+          <LuLayoutDashboard aria-hidden="true" className="size-3.5" />
+          В админку
+        </Link>
       </div>
     </div>
   )

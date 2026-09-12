@@ -21,7 +21,7 @@ export default function AdminDialogClassification({ dialogId, updatedAt }: Admin
     : 'Не удалось определить тему обращения.'
 
   return (
-    <section aria-label="Классификация обращения" aria-busy={classification.isFetching} className="border-border shrink-0 border-b px-5 py-3">
+    <section aria-label="Классификация обращения" aria-busy={classification.isFetching} className="border-border border-b px-5 py-4">
       {classification.isFetching ? (
         <p role="status" className="text-foreground/60 text-ui-small">Определяем тему и подтему…</p>
       ) : classification.isError || stale ? (
@@ -34,14 +34,14 @@ export default function AdminDialogClassification({ dialogId, updatedAt }: Admin
           </Button>
         </div>
       ) : result ? (
-        <div className="space-y-1.5">
-          <dl className="text-ui-small flex flex-wrap gap-x-6 gap-y-1">
-            <div className="flex min-w-0 gap-2">
-              <dt className="text-foreground/50 shrink-0">Тема:</dt>
+        <div className="space-y-3">
+          <dl className="text-ui-small space-y-4">
+            <div className="min-w-0 space-y-2">
+              <dt className="text-foreground/50">Тема</dt>
               <dd className="wrap-break-word font-medium">{result.topic ?? 'Не определена'}</dd>
             </div>
-            <div className="flex min-w-0 gap-2">
-              <dt className="text-foreground/50 shrink-0">Подтема:</dt>
+            <div className="min-w-0 space-y-2">
+              <dt className="text-foreground/50">Подтема</dt>
               <dd className="wrap-break-word font-medium">{result.subtopic ?? 'Не определена'}</dd>
             </div>
           </dl>

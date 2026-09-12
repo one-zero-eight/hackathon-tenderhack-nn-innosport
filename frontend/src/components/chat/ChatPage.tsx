@@ -29,9 +29,12 @@ export default function ChatPage() {
   const transport = useApiTransport()
   const chat = useChat(transport, onActiveChatChange)
   const { data: listed, isLoading: listLoading, isError: listError } = $api.useQuery('get', '/dialogs', { params: { query: { limit: 100 } } })
-  const requestedId = dialogId ?? chat.activeChatId
+  const requestedId = dialogId ?? ''
   const dialogQuery = $api.useQuery('get', '/dialogs/{dialog_id}', { params: { path: { dialog_id: requestedId } } }, { enabled: isBackendDialogId(requestedId) })
   const dialog = dialogQuery.data
+  const [newDraft, setNewDraft] = useState('')
+  const [startingChat, setStartingChat] = useState(false)
+  const startingChatRef = useRef(false)
   const [leftOpen, setLeftOpen] = useState(false)
   const [nearBottom, setNearBottom] = useState(true)
   const transcriptRef = useRef<ChatTranscriptHandle>(null)
@@ -52,25 +55,36 @@ export default function ChatPage() {
     if (dialogId) selectChat(dialogId)
   }, [dialogId, chats, selectChat])
 
-  useEffect(() => {
-    if (!dialogId) void navigate({ to: '/tickets/$dialogId', params: { dialogId: chat.activeChatId }, replace: true })
-  }, [dialogId, chat.activeChatId, navigate])
-
   const routeReady = dialogId === chat.activeChatId
   const missingLocalChat = Boolean(dialogId && !isBackendDialogId(dialogId) && !chat.chats.some((item) => item.id === dialogId))
   const routeError = missingLocalChat || dialogQuery.isError
   const notFound = missingLocalChat || isDialogNotFound(dialogQuery.error)
 
   const createTicket = async () => {
-    const created = await chat.createChat()
-    await navigate({ to: '/tickets/$dialogId', params: { dialogId: created.id } })
+    await navigate({ to: '/' })
     setLeftOpen(false)
+  }
+
+  const sendNewRequest = async (text: string): Promise<boolean> => {
+    if (startingChatRef.current || !text.trim()) return false
+    startingChatRef.current = true
+    setStartingChat(true)
+    try {
+      const created = await chat.createChat()
+      chat.setDraft(text)
+      await navigate({ to: '/tickets/$dialogId', params: { dialogId: created.id } })
+      setNewDraft('')
+      return await chat.send(text)
+    } finally {
+      startingChatRef.current = false
+      setStartingChat(false)
+    }
   }
 
   const sidebar = (
     <ChatSidebar
       chats={chat.chats}
-      activeId={dialogId ?? chat.activeChatId}
+      activeId={dialogId ?? ''}
       loading={listLoading}
       error={listError ? 'Не удалось загрузить обращения с сервера.' : null}
       onSelect={() => setLeftOpen(false)}
@@ -93,7 +107,15 @@ export default function ChatPage() {
             <Button variant="ghost" className="bg-background/90 absolute top-4 left-4 z-20 p-2 shadow-sm backdrop-blur md:hidden" aria-label="Открыть список обращений" onClick={() => setLeftOpen(true)}>
               <LuPanelLeft className="size-5" />
             </Button>
-            {routeError ? (
+            {!dialogId ? (
+              <div className="m-auto w-full max-w-3xl space-y-6 px-4 py-16 sm:px-8">
+                <div className="space-y-2 text-center">
+                  <h1 className="text-ui-title font-semibold tracking-tight">Чем можем помочь?</h1>
+                  <p className="text-foreground/50 text-ui-body">Задайте вопрос о работе на Портале поставщиков.</p>
+                </div>
+                <ChatComposer draft={newDraft} onDraft={setNewDraft} onSend={sendNewRequest} busy={startingChat} />
+              </div>
+            ) : routeError ? (
               <div role="alert" className="m-auto space-y-3 p-6 text-center">
                 <p>{notFound ? 'Обращение не найдено.' : 'Не удалось загрузить обращение.'}</p>
                 {!notFound && (
