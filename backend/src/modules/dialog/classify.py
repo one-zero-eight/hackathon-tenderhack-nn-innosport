@@ -31,6 +31,16 @@ def is_capability_question(text: str) -> bool:
     return any(pattern.search(normalized) for pattern in CAPABILITY_PATTERNS)
 
 
+def is_thanks(text: str) -> bool:
+    normalized = " ".join(tokenize(text))
+    return bool(
+        re.fullmatch(
+            r"(?:(?:большое|огромное) )?(?:спасибо|благодарю)(?: (?:вам|большое|все понятно|понятно|помогло))?",
+            normalized,
+        )
+    )
+
+
 def is_greeting(text: str) -> bool:
     tokens = tokenize(text)
     return bool(tokens) and len(tokens) <= 3 and all(token in GREETING_TOKENS for token in tokens)

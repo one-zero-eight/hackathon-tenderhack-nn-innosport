@@ -17,8 +17,9 @@ def build_llama_client_from_settings() -> DialogLlamaClient:
     return LlamaCppClient(
         base_url=llama.base_url,
         model=llama.model,
-        timeout_seconds=llama.timeout_seconds,
         answer_max_tokens=llama.answer_max_tokens,
+        context_tokens=llama.context_tokens,
+        max_tool_rounds=llama.max_tool_rounds,
         temperature=llama.temperature,
     )
 

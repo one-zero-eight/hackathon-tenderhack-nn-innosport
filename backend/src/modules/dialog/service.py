@@ -1,9 +1,11 @@
+import re
+
 from fastapi import HTTPException, status
 
 from src.modules.dialog.abuse import is_abuse
-from src.modules.dialog.classify import is_capability_question, is_greeting
+from src.modules.dialog.classify import is_capability_question, is_greeting, is_thanks
 from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient
-from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_reply
+from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_answer
 from src.modules.dialog.routing import is_l2_request
 from src.modules.dialog.schemas import (
     Citation,
@@ -29,6 +31,7 @@ from src.modules.dialog.texts import (
     GREETING_REPLY,
     L1_REPLY,
     L2_REPLY,
+    MODEL_UNAVAILABLE_REPLY,
     NO_KNOWLEDGE_REPLY,
 )
 
@@ -130,7 +133,7 @@ class DialogService:
                 line=None,
             )
 
-        if is_greeting(text) or is_capability_question(text):
+        if isinstance(self.llama_client, NullLlamaClient) and (is_greeting(text) or is_capability_question(text)):
             return self._finish(
                 state,
                 reply=GREETING_REPLY if is_greeting(text) else CAPABILITIES_REPLY,
@@ -140,37 +143,85 @@ class DialogService:
                 line=None,
             )
 
-        dialog_query = self._dialog_query(state)
-        chunks = await self.retriever.find(dialog_query)
-        if not chunks:
-            return self._offer_specialist(state)
+        if is_thanks(text):
+            return self._finish(
+                state,
+                reply="Пожалуйста! Обращайтесь, если появятся вопросы.",
+                status=DialogStatus.CLARIFYING,
+                closed=False,
+                reason=None,
+                line=None,
+            )
+
         history = [(item.role, item.content) for item in state.messages]
-        generated = await self.llama_client.generate_answer(text, history, chunks)
-        if generated is not None:
-            selected = [chunk for chunk in chunks if chunk.id in generated.citation_ids]
+        result = await self.llama_client.run(text, history, self.retriever)
+        if result is not None:
+            generated = result.reply
+            if generated.kind != "answer":
+                return self._finish(
+                    state,
+                    reply=generated.text,
+                    status=DialogStatus.ESCALATE if generated.kind == "no_knowledge" else DialogStatus.CLARIFYING,
+                    closed=False,
+                    reason="no_knowledge" if generated.kind == "no_knowledge" else None,
+                    line=None,
+                )
+            selected = result.sources
             reply = generated.text
+        elif isinstance(self.llama_client, NullLlamaClient):
+            dialog_query = self._dialog_query(state)
+            chunks = await self.retriever.find(dialog_query, limit=6)
+            reply, selected = extractive_answer(dialog_query, chunks)
         else:
-            selected = chunks
-            reply = extractive_reply(dialog_query, selected)
+            # Agent failure must not silently turn a related passage into an
+            # authoritative answer. Keep the dialog open for retry/handoff.
+            return self._finish(
+                state,
+                reply=MODEL_UNAVAILABLE_REPLY,
+                status=DialogStatus.CLARIFYING,
+                closed=False,
+                reason="model_unavailable",
+                line=None,
+            )
         if not reply:
             return self._offer_specialist(state)
         state.status = DialogStatus.ANSWERED
         state.closed = False
         state.reason = None
         state.line = None
+        unique_sources = dict.fromkeys((chunk.document, chunk.section, chunk.path) for chunk in selected)
         state.citations = [
-            StoredCitation(document=chunk.document, section=chunk.section, path=chunk.path) for chunk in selected
+            StoredCitation(document=document, section=section, path=path) for document, section, path in unique_sources
         ]
         return self._response(
             state,
             reply,
-            citations=[Citation(document=chunk.document, section=chunk.section, path=chunk.path) for chunk in selected],
+            citations=[
+                Citation(document=document, section=section, path=path) for document, section, path in unique_sources
+            ],
         )
 
     @staticmethod
     def _dialog_query(state: ConversationState) -> str:
-        user_messages = [item.content for item in state.messages if item.role == "user"]
-        return "\n".join(user_messages[-8:])
+        user_messages = [
+            item.content
+            for item in state.messages
+            if item.role == "user" and not is_greeting(item.content) and not is_capability_question(item.content)
+        ]
+        if not user_messages:
+            return ""
+        current = user_messages[-1]
+        # Resolve explicit follow-ups without polluting a new question with old topics.
+        follow_up = re.search(
+            r"^(?:а\s+)?(?:(?:как|где|когда|почему|зачем)\s+)?"
+            r"(?:это|этого|этому|этой|этот|эту|этом|его|её|ее|их|такой|такую|там|дальше|подробнее)\b"
+            r"|^(?:не получилось|не помогло|что делать дальше|а по|а если|я поставщик|я заказчик)\b",
+            current,
+            re.IGNORECASE,
+        )
+        if follow_up and len(user_messages) > 1:
+            return f"{user_messages[-2]}\n{current}"
+        return current
 
     def _offer_specialist(self, state: ConversationState) -> DialogResponse:
         return self._finish(

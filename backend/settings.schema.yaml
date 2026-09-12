@@ -43,20 +43,27 @@ $defs:
           llama.cpp use its loaded model.
         title: Model
         type: string
-      timeout_seconds:
-        default: 8.0
-        description: HTTP timeout; on timeout the API extracts an answer from retrieved
-          sources
-        exclusiveMinimum: 0
-        maximum: 120
-        title: Timeout Seconds
-        type: number
+      max_tool_rounds:
+        default: 2
+        description: Maximum knowledge tool rounds before the agent must respond
+        maximum: 8
+        minimum: 1
+        title: Max Tool Rounds
+        type: integer
       answer_max_tokens:
-        default: 192
-        description: Maximum output tokens for a grounded answer
+        default: 1024
+        description: Maximum output tokens for a natural-language support answer
         exclusiveMinimum: 0
         maximum: 8192
         title: Answer Max Tokens
+        type: integer
+      context_tokens:
+        default: 2048
+        description: Context budget per server slot; must not exceed llama.cpp --ctx-size
+          / --parallel
+        maximum: 131072
+        minimum: 1024
+        title: Context Tokens
         type: integer
       temperature:
         default: 0.0

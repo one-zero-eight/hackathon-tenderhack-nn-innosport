@@ -23,10 +23,12 @@ class LlamaCppSettings(SettingBaseModel):
     "OpenAI-compatible llama.cpp server, e.g. http://127.0.0.1:8080 or http://192.168.1.10:8080"
     model: str = ""
     "Model name forwarded to /v1/chat/completions. Empty string lets llama.cpp use its loaded model."
-    timeout_seconds: float = Field(default=8.0, gt=0, le=120)
-    "HTTP timeout; on timeout the API extracts an answer from retrieved sources"
-    answer_max_tokens: int = Field(default=192, gt=0, le=8192)
-    "Maximum output tokens for a grounded answer"
+    max_tool_rounds: int = Field(default=2, ge=1, le=8)
+    "Maximum knowledge tool rounds before the agent must respond"
+    answer_max_tokens: int = Field(default=1024, gt=0, le=8192)
+    "Maximum output tokens for a natural-language support answer"
+    context_tokens: int = Field(default=2048, ge=1024, le=131072)
+    "Context budget per server slot; must not exceed llama.cpp --ctx-size / --parallel"
     temperature: float = Field(default=0.0, ge=0, le=2)
 
 

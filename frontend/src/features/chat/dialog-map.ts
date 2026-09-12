@@ -33,7 +33,7 @@ export function mapDialogResponse(data: SchemaDialogResponse): ChatReply {
   return {
     dialogId: data.id,
     content: `${data.reply}${data.status === 'answered' ? formatCitations(citations) : ''}`,
-    kind: data.status === 'answered' ? 'answer' : 'notice',
+    kind: closed ? 'notice' : 'answer',
     closed,
     offerSpecialist: data.status === 'escalate' && !closed,
   }
@@ -127,7 +127,7 @@ function mapViewMessages(view: SchemaDialogView, existing?: Chat): ChatMessage[]
       role,
       content: isLastAssistant ? lastReply.content : message.content,
       createdAt: previous?.createdAt ?? toTimestamp(view.updated_at),
-      ...(role === 'assistant' ? { kind: isLastAssistant ? lastReply.kind : 'notice' } : {}),
+      ...(role === 'assistant' ? { kind: isLastAssistant ? lastReply.kind : 'answer' } : {}),
     }
   })
 }
