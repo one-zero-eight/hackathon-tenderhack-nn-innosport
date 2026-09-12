@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from src.modules.dialog.schemas import DialogStatus, SupportLine
+from src.modules.dialog.schemas import Clarification, DialogStatus, SupportLine, ToolCall
 from src.pydantic_base import BaseSchema
 
 
@@ -15,6 +15,8 @@ def utcnow() -> dtm.datetime:
 class StoredMessage(BaseSchema):
     role: str
     content: str
+    clarification: Clarification | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class StoredCitation(BaseSchema):
@@ -26,6 +28,7 @@ class StoredCitation(BaseSchema):
 class ConversationState(BaseSchema):
     id: str
     revision: int = 0
+    clarification: Clarification | None = None
     closed: bool = False
     status: DialogStatus | None = None
     line: SupportLine | None = None

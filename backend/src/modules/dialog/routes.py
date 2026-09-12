@@ -1,10 +1,17 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.api import docs
-from src.modules.dialog.schemas import DialogDeleteResult, DialogListItem, DialogResponse, DialogView, MessageCreate
+from src.modules.dialog.schemas import (
+    DialogDeleteResult,
+    DialogListItem,
+    DialogResponse,
+    DialogStreamEvent,
+    DialogView,
+    MessageCreate,
+)
 from src.modules.dialog.service import DialogClosedError, DialogService
 
 router = APIRouter(tags=["dialog"])
@@ -21,6 +28,10 @@ def get_dialog_service(request: Request) -> DialogService:
 
 
 DialogServiceDep = Annotated[DialogService, Depends(get_dialog_service)]
+
+
+class DialogStreamingResponse(StreamingResponse):
+    media_type = "application/x-ndjson"
 
 
 @router.post("/dialogs", response_model=DialogView)
@@ -51,12 +62,34 @@ async def delete_dialog(dialog_id: str, service: DialogServiceDep) -> DialogDele
     return await service.delete(dialog_id)
 
 
-@router.post("/dialogs/{dialog_id}/messages", response_model=DialogResponse)
-async def post_message(dialog_id: str, payload: MessageCreate, service: DialogServiceDep):
+@router.post("/dialogs/{dialog_id}/messages")
+async def post_message(dialog_id: str, payload: MessageCreate, service: DialogServiceDep) -> DialogResponse:
     try:
-        return await service.add_message(dialog_id, payload.content)
+        return await service.add_message(dialog_id, payload.content, clarification_id=payload.clarification_id)
     except DialogClosedError as exc:
         return JSONResponse(status_code=exc.status_code, content=exc.detail)
+
+
+@router.post(
+    "/dialogs/{dialog_id}/messages/stream",
+    response_class=DialogStreamingResponse,
+    responses={
+        200: {
+            "model": DialogStreamEvent,
+            "description": "NDJSON events: provisional text, tool execution statuses, then a saved response or an error.",
+            "content": {"application/x-ndjson": {}},
+        }
+    },
+)
+async def stream_message(dialog_id: str, payload: MessageCreate, service: DialogServiceDep) -> StreamingResponse:
+    try:
+        events = await service.stream_message(dialog_id, payload.content, clarification_id=payload.clarification_id)
+    except DialogClosedError as exc:
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    return DialogStreamingResponse(
+        events,
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/dialogs/{dialog_id}/escalate", response_model=DialogResponse)

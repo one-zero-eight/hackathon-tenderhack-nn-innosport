@@ -33,7 +33,9 @@ export function mapDialogResponse(data: SchemaDialogResponse): ChatReply {
   return {
     dialogId: data.id,
     content: `${data.reply}${data.status === 'answered' ? formatCitations(citations) : ''}`,
-    kind: closed ? 'notice' : 'answer',
+    kind: closed || data.clarification ? 'notice' : 'answer',
+    ...(data.clarification ? { clarification: data.clarification } : {}),
+    ...(data.tool_calls?.length ? { toolCalls: data.tool_calls } : {}),
     closed,
     offerSpecialist: data.status === 'escalate' && !closed,
   }
@@ -71,6 +73,7 @@ export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): C
     title: item.title || existing?.title || 'Новое обращение',
     updatedAt,
     messages: existing?.messages ?? [],
+    ...(existing?.clarification ? { clarification: existing.clarification } : {}),
     status,
     feedbackDismissed: existing?.feedbackDismissed ?? false,
     ...(item.preview ? { preview: item.preview } : existing?.preview ? { preview: existing.preview } : {}),
@@ -92,12 +95,10 @@ export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): C
 
 export function chatFromDialogView(view: SchemaDialogView, existing?: Chat): Chat {
   const updatedAt = toTimestamp(view.updated_at, existing?.updatedAt)
-  const keepLocalMessages = Boolean(existing?.messages.length)
-  const title = keepLocalMessages ? existing!.title : firstUserTitle(view.messages) || existing?.title || 'Новое обращение'
-  const preview = keepLocalMessages
-    ? existing?.preview
-    : [...(view.messages ?? [])].reverse().find((message) => message.role === 'user')?.content.trim().replace(/\s+/g, ' ').slice(0, 80)
-  const messages = keepLocalMessages ? existing!.messages : mapViewMessages(view, existing)
+  if (existing?.messages.length && updatedAt < existing.updatedAt) return existing
+  const title = firstUserTitle(view.messages) || existing?.title || 'Новое обращение'
+  const preview = [...(view.messages ?? [])].reverse().find((message) => message.role === 'user')?.content.trim().replace(/\s+/g, ' ').slice(0, 80)
+  const messages = mapViewMessages(view, existing)
   return chatFromListItem(
     {
       id: view.id,
@@ -109,24 +110,28 @@ export function chatFromDialogView(view: SchemaDialogView, existing?: Chat): Cha
       reason: view.reason,
       updated_at: updatedAt,
     },
-    { ...(existing ?? createChat(view.id, updatedAt)), messages },
+    { ...(existing ?? createChat(view.id, updatedAt)), messages, clarification: view.clarification ?? undefined },
   )
 }
 
 function mapViewMessages(view: SchemaDialogView, existing?: Chat): ChatMessage[] {
   const raw = view.messages ?? []
   const lastReply = mapDialogResponse(view)
+  const previousMessages = existing?.messages.filter((message) => message.kind !== 'notice' || message.clarification)
   return raw.map((message, index) => {
     const role = message.role === 'user' ? 'user' : 'assistant'
-    const previous = existing?.messages[index]
-    if (previous && previous.role === role) return previous
+    const candidate = previousMessages?.[index]
+    const previous = candidate?.role === role && candidate.content === message.content ? candidate : undefined
     const isLastAssistant = role === 'assistant' && index === raw.length - 1
     return {
       id: previous?.id ?? `${view.id}:m${index}`,
       role,
       content: isLastAssistant ? lastReply.content : message.content,
       createdAt: previous?.createdAt ?? toTimestamp(view.updated_at),
-      ...(role === 'assistant' ? { kind: isLastAssistant ? lastReply.kind : 'answer' } : {}),
+      ...(role === 'assistant' ? { kind: message.clarification ? 'notice' : isLastAssistant ? lastReply.kind : 'answer' } : {}),
+      ...(role === 'assistant' && message.clarification ? { clarification: message.clarification } : {}),
+      ...(previous?.clarificationId ? { clarificationId: previous.clarificationId } : {}),
+      ...(role === 'assistant' && message.tool_calls?.length ? { toolCalls: message.tool_calls } : {}),
     }
   })
 }
@@ -140,6 +145,7 @@ function sameChat(left: Chat, right: Chat): boolean {
     left.status === right.status &&
     left.closedAt === right.closedAt &&
     left.offerSpecialist === right.offerSpecialist &&
+    left.clarification === right.clarification &&
     left.feedbackDismissed === right.feedbackDismissed &&
     left.messages === right.messages &&
     left.handoff === right.handoff &&

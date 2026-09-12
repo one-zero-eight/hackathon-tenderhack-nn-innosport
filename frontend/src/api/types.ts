@@ -58,6 +58,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dialogs/{dialog_id}/messages/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stream Message */
+        post: operations["stream_message_dialogs__dialog_id__messages_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dialogs/{dialog_id}/escalate": {
         parameters: {
             query?: never;
@@ -90,6 +107,15 @@ export interface components {
             section: string;
             /** Path */
             path: string;
+        };
+        /** Clarification */
+        Clarification: {
+            /** Question */
+            question: string;
+            /** Options */
+            options: string[];
+            /** Id */
+            id: string;
         };
         /** DialogDeleteResult */
         DialogDeleteResult: {
@@ -128,6 +154,9 @@ export interface components {
             role: string;
             /** Content */
             content: string;
+            clarification?: components["schemas"]["Clarification"] | null;
+            /** Tool Calls */
+            tool_calls?: components["schemas"]["ToolCall"][];
         };
         /** DialogResponse */
         DialogResponse: {
@@ -135,6 +164,9 @@ export interface components {
             id: string;
             /** Reply */
             reply: string;
+            clarification?: components["schemas"]["Clarification"] | null;
+            /** Tool Calls */
+            tool_calls?: components["schemas"]["ToolCall"][];
             status?: components["schemas"]["DialogStatus"] | null;
             line?: components["schemas"]["SupportLine"] | null;
             /** Citations */
@@ -154,12 +186,33 @@ export interface components {
          * @enum {string}
          */
         DialogStatus: "clarifying" | "answered" | "escalate" | "closed_abuse";
+        /** DialogStreamEvent */
+        DialogStreamEvent: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "text" | "tool" | "done" | "error";
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            tool_call?: components["schemas"]["ToolCall"] | null;
+            status?: components["schemas"]["ToolStatus"] | null;
+            response?: components["schemas"]["DialogResponse"] | null;
+            /** Detail */
+            detail?: string | null;
+        };
         /** DialogView */
         DialogView: {
             /** Id */
             id: string;
             /** Reply */
             reply: string;
+            clarification?: components["schemas"]["Clarification"] | null;
+            /** Tool Calls */
+            tool_calls?: components["schemas"]["ToolCall"][];
             status?: components["schemas"]["DialogStatus"] | null;
             line?: components["schemas"]["SupportLine"] | null;
             /** Citations */
@@ -185,12 +238,31 @@ export interface components {
         MessageCreate: {
             /** Content */
             content: string;
+            /** Clarification Id */
+            clarification_id?: string | null;
         };
         /**
          * SupportLine
          * @enum {string}
          */
         SupportLine: "L1" | "L2" | "L3";
+        /** ToolCall */
+        ToolCall: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+        };
+        /** @enum {string} */
+        ToolStatus: "preparing" | "running" | "completed" | "error" | "awaiting_user";
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -212,15 +284,19 @@ export interface components {
     pathItems: never;
 }
 export type SchemaCitation = components['schemas']['Citation'];
+export type SchemaClarification = components['schemas']['Clarification'];
 export type SchemaDialogDeleteResult = components['schemas']['DialogDeleteResult'];
 export type SchemaDialogListItem = components['schemas']['DialogListItem'];
 export type SchemaDialogMessage = components['schemas']['DialogMessage'];
 export type SchemaDialogResponse = components['schemas']['DialogResponse'];
 export type SchemaDialogStatus = components['schemas']['DialogStatus'];
+export type SchemaDialogStreamEvent = components['schemas']['DialogStreamEvent'];
 export type SchemaDialogView = components['schemas']['DialogView'];
 export type SchemaHttpValidationError = components['schemas']['HTTPValidationError'];
 export type SchemaMessageCreate = components['schemas']['MessageCreate'];
 export type SchemaSupportLine = components['schemas']['SupportLine'];
+export type SchemaToolCall = components['schemas']['ToolCall'];
+export type SchemaToolStatus = components['schemas']['ToolStatus'];
 export type SchemaValidationError = components['schemas']['ValidationError'];
 export type $defs = Record<string, never>;
 export interface operations {
@@ -379,6 +455,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DialogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_message_dialogs__dialog_id__messages_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dialog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCreate"];
+            };
+        };
+        responses: {
+            /** @description NDJSON events: provisional text, tool execution statuses, then a saved response or an error. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": components["schemas"]["DialogStreamEvent"];
                 };
             };
             /** @description Validation Error */

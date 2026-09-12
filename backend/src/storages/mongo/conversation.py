@@ -1,10 +1,11 @@
 import datetime as dtm
 import re
+from typing import ClassVar
 
 from beanie import PydanticObjectId
 from pydantic import Field
 
-from src.modules.dialog.schemas import DialogStatus, SupportLine
+from src.modules.dialog.schemas import Clarification, DialogStatus, SupportLine, ToolCall
 from src.modules.dialog.store import (
     ConversationConflictError,
     ConversationState,
@@ -19,6 +20,8 @@ from src.storages.mongo.__base__ import CustomDocument
 class ConversationMessageSchema(BaseSchema):
     role: str
     content: str
+    clarification: Clarification | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class ConversationCitationSchema(BaseSchema):
@@ -29,6 +32,7 @@ class ConversationCitationSchema(BaseSchema):
 
 class ConversationSchema(BaseSchema):
     revision: int = 0
+    clarification: Clarification | None = None
     closed: bool = False
     status: DialogStatus | None = None
     line: SupportLine | None = None
@@ -43,7 +47,7 @@ class Conversation(ConversationSchema, CustomDocument):
         name = "conversations"
         keep_nulls = False
         max_nesting_depth = 1
-        indexes = ["updated_at"]
+        indexes: ClassVar[list[str]] = ["updated_at"]
 
 
 def _document_updated_at(document: Conversation) -> dtm.datetime:
@@ -64,6 +68,7 @@ def document_to_state(document: Conversation) -> ConversationState:
     return ConversationState(
         id=str(document.id),
         revision=document.revision,
+        clarification=document.clarification,
         closed=document.closed,
         status=document.status,
         line=document.line,
@@ -76,7 +81,15 @@ def document_to_state(document: Conversation) -> ConversationState:
             )
             for item in document.citations
         ],
-        messages=[StoredMessage(role=item.role, content=item.content) for item in document.messages],
+        messages=[
+            StoredMessage(
+                role=item.role,
+                content=item.content,
+                clarification=item.clarification,
+                tool_calls=item.tool_calls,
+            )
+            for item in document.messages
+        ],
         updated_at=_document_updated_at(document),
     )
 
@@ -117,6 +130,7 @@ class MongoConversationStore:
             {"_id": object_id, **revision_filter},
             {
                 "$set": {
+                    "clarification": state.clarification.model_dump(mode="python") if state.clarification else None,
                     "closed": state.closed,
                     "status": state.status,
                     "line": state.line,
@@ -134,6 +148,8 @@ class MongoConversationStore:
                         ConversationMessageSchema(
                             role=item.role,
                             content=item.content,
+                            clarification=item.clarification,
+                            tool_calls=item.tool_calls,
                         ).model_dump(mode="python")
                         for item in state.messages
                     ],

@@ -1,4 +1,4 @@
-import type { Chat, ChatMessage, ChatMessageKind, ChatReply, FeedbackRating, SpecialistResponse } from './types.ts'
+import type { Chat, ChatMessage, ChatMessageKind, ChatReply, ClarificationRequest, FeedbackRating, SpecialistResponse, ToolCall } from './types.ts'
 
 // Keep the original key so valid v1 local history is migrated in place.
 // Feedback stays local. Conversation turns are sent to the dialog API.
@@ -29,7 +29,7 @@ export function withOnlyChat(replacement: Chat): ChatHistory {
 
 /** Unknown/legacy text, notices, questions and handoff confirmations are not answers. */
 export function isSubstantiveAnswer(message: ChatMessage): boolean {
-  return message.role === 'assistant' && message.kind === 'answer' && message.content.trim().length > 0
+  return message.role === 'assistant' && message.kind === 'answer' && !message.clarification && message.content.trim().length > 0
 }
 
 export function canFeedback(chat: Chat): boolean {
@@ -63,7 +63,7 @@ export function applySpecialistHandoff(chat: Chat, response: SpecialistResponse,
   if (!canContactSpecialist(chat) || !isSpecialistResponse(response) || (!response.simulated && !response.line)) return chat
   const specialistType = response.specialistType?.trim()
   const next: Chat = {
-    ...chat, updatedAt: now, offerSpecialist: false,
+    ...chat, updatedAt: now, offerSpecialist: false, clarification: undefined,
     handoff: { requestId: response.requestId, simulated: response.simulated, ...(response.line ? { line: response.line } : {}), ...(specialistType ? { specialistType } : {}), createdAt: now },
     messages: [...chat.messages, {
       id: messageId, role: 'assistant', kind: 'handoff', createdAt: now,
@@ -96,6 +96,8 @@ export function applyExchange(chat: Chat, userMessage: ChatMessage, reply: ChatR
     content: reply.content,
     kind: reply.kind ?? 'notice',
     createdAt: userMessage.createdAt,
+    ...(reply.toolCalls?.length ? { toolCalls: reply.toolCalls } : {}),
+    ...(reply.clarification ? { clarification: reply.clarification } : {}),
   }
   const firstMessage = !chat.messages.some((message) => message.role === 'user')
   const title = userMessage.content.trim().replace(/\s+/g, ' ')
@@ -105,6 +107,7 @@ export function applyExchange(chat: Chat, userMessage: ChatMessage, reply: ChatR
     updatedAt: userMessage.createdAt,
     messages: [...chat.messages, userMessage, assistantMessage],
     offerSpecialist: Boolean(reply.offerSpecialist),
+    clarification: reply.closed ? undefined : reply.clarification,
   }
   if (!reply.closed) return next
   return { ...next, status: 'closed', closedAt: userMessage.createdAt }
@@ -141,14 +144,38 @@ export function isSpecialistResponse(value: unknown): value is SpecialistRespons
   )
 }
 
+export function isClarificationRequest(value: unknown): value is ClarificationRequest {
+  return isRecord(value) && isNonemptyString(value.id) && isNonemptyString(value.question) && Array.isArray(value.options) && value.options.every(isNonemptyString)
+}
+
+/** Only the latest persisted, unanswered card can accept an answer. */
+export function pendingClarificationMessageId(chat: Chat): string | undefined {
+  if (!chat.clarification) return undefined
+  for (let index = chat.messages.length - 1; index >= 0; index--) {
+    const message = chat.messages[index]
+    if (message.pending) continue
+    if (message.role === 'user') return undefined
+    if (message.role === 'assistant' && message.clarification) {
+      return message.clarification.id === chat.clarification.id ? message.id : undefined
+    }
+  }
+  return undefined
+}
+
+export function isToolCall(value: unknown): value is ToolCall {
+  return isRecord(value) && isNonemptyString(value.id) && isNonemptyString(value.name) && isRecord(value.arguments) && isRecord(value.result)
+}
+
 export function isChatReply(value: unknown): value is ChatReply {
   return (
     isRecord(value) &&
     typeof value.content === 'string' &&
+    (value.toolCalls === undefined || (Array.isArray(value.toolCalls) && value.toolCalls.every(isToolCall))) &&
     (value.kind === undefined || isMessageKind(value.kind)) &&
     (value.closed === undefined || typeof value.closed === 'boolean') &&
     (value.offerSpecialist === undefined || typeof value.offerSpecialist === 'boolean') &&
-    (value.dialogId === undefined || isNonemptyString(value.dialogId))
+    (value.dialogId === undefined || isNonemptyString(value.dialogId)) &&
+    (value.clarification === undefined || isClarificationRequest(value.clarification))
   )
 }
 
@@ -158,8 +185,11 @@ function isStoredMessage(value: unknown): value is Omit<ChatMessage, 'kind'> & {
     isNonemptyString(value.id) &&
     (value.role === 'user' || value.role === 'assistant') &&
     typeof value.content === 'string' &&
+    (value.toolCalls === undefined || (Array.isArray(value.toolCalls) && value.toolCalls.every(isToolCall))) &&
     (value.kind === undefined || value.kind === 'clarification' || isMessageKind(value.kind)) &&
-    isTimestamp(value.createdAt)
+    isTimestamp(value.createdAt) &&
+    (value.clarification === undefined || isClarificationRequest(value.clarification)) &&
+    (value.clarificationId === undefined || isNonemptyString(value.clarificationId))
   )
 }
 
@@ -169,6 +199,7 @@ function migrateChat(value: unknown, version: number): Chat | null {
   const feedbackDismissed = version === 1 && value.feedbackDismissed === undefined ? false : value.feedbackDismissed
   if ((status !== 'open' && status !== 'closed') || typeof feedbackDismissed !== 'boolean') return null
   if (value.offerSpecialist !== undefined && typeof value.offerSpecialist !== 'boolean') return null
+  if (value.clarification !== undefined && !isClarificationRequest(value.clarification)) return null
   if (value.closedAt !== undefined && !isTimestamp(value.closedAt)) return null
   if (status === 'closed' && !isTimestamp(value.closedAt)) return null
   if (status === 'open' && value.closedAt !== undefined) return null
@@ -182,13 +213,16 @@ function migrateChat(value: unknown, version: number): Chat | null {
     updatedAt: value.updatedAt,
     status,
     feedbackDismissed,
-    // Preserve saved conversation text, but discard retired choice metadata.
+    ...(value.clarification ? { clarification: value.clarification as ClarificationRequest } : {}),
     messages: value.messages.map((message) => ({
       id: message.id,
       role: message.role,
       content: message.content,
       createdAt: message.createdAt,
       kind: message.kind === 'clarification' ? 'notice' : message.kind ?? 'notice',
+      ...(message.clarification ? { clarification: message.clarification } : {}),
+      ...(message.clarificationId ? { clarificationId: message.clarificationId } : {}),
+      ...(message.toolCalls?.length ? { toolCalls: message.toolCalls } : {}),
     })),
     ...(status === 'closed' ? { closedAt: value.closedAt as string } : {}),
     ...(handoff ? { handoff: { requestId: handoff.requestId as string, simulated: handoff.simulated as boolean, ...(handoff.line ? { line: handoff.line } : {}), ...(handoff.specialistType !== undefined ? { specialistType: handoff.specialistType as string } : {}), createdAt: handoff.createdAt as string } } : {}),

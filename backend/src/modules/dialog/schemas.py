@@ -1,8 +1,8 @@
 import datetime as dtm
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, field_validator
 
 from src.pydantic_base import BaseSchema
 
@@ -26,22 +26,64 @@ class Citation(BaseSchema):
     path: str
 
 
+class ToolCall(BaseSchema):
+    id: str
+    name: str
+    arguments: dict[str, Any]
+    result: dict[str, Any]
+
+
+class ClarificationQuestion(BaseSchema):
+    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+    options: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]] = Field(
+        min_length=2,
+        max_length=6,
+    )
+
+    @field_validator("options")
+    @classmethod
+    def validate_options(cls, values: list[str]) -> list[str]:
+        normalized = [value.casefold() for value in values]
+        if len(set(normalized)) != len(normalized) or "другое" in normalized:
+            raise ValueError("Options must be unique; Other is provided by the UI")
+        return values
+
+
+class Clarification(ClarificationQuestion):
+    id: str
+
+
 class MessageCreate(BaseSchema):
     content: Annotated[
         str,
         StringConstraints(strip_whitespace=True, min_length=1, max_length=4000),
     ]
+    clarification_id: str | None = None
 
 
 class DialogResponse(BaseSchema):
     id: str
     reply: str
+    clarification: Clarification | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=list)
     status: DialogStatus | None = None
     line: SupportLine | None = None
     citations: list[Citation] = Field(default_factory=list)
     closed: bool = False
     reason: str | None = None
     updated_at: dtm.datetime | None = None
+
+
+type ToolStatus = Literal["preparing", "running", "completed", "error", "awaiting_user"]
+
+
+class DialogStreamEvent(BaseSchema):
+    type: Literal["text", "tool", "done", "error"]
+    text: str = ""
+    tool_call: ToolCall | None = None
+    status: ToolStatus | None = None
+    response: DialogResponse | None = None
+    detail: str | None = None
 
 
 class DialogListItem(BaseSchema):
@@ -58,6 +100,8 @@ class DialogListItem(BaseSchema):
 class DialogMessage(BaseSchema):
     role: str
     content: str
+    clarification: Clarification | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class DialogView(DialogResponse):

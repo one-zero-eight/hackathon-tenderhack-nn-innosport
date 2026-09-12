@@ -1,14 +1,22 @@
 import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { $api } from '@/api'
-import type { SchemaDialogResponse, SchemaDialogView } from '@/api/types'
+import { $api, eventsFetch } from '@/api'
+import { readDialogStream } from './stream.ts'
+import type { SchemaDialogResponse, SchemaDialogView, SchemaMessageCreate } from '@/api/types'
 import { isBackendDialogId, isDialogNotFound, isDialogPayload, mapDialogResponse, mapSpecialistResponse } from './dialog-map.ts'
-import type { ChatTransport } from './types.ts'
+import type { ChatToolCall, ChatTransport } from './types.ts'
 
 export { isBackendDialogId, isDialogNotFound, isDialogPayload, mapDialogResponse, mapSpecialistResponse } from './dialog-map.ts'
 
 type CreateDialog = (init: { signal?: AbortSignal }) => Promise<SchemaDialogView>
-type PostMessage = (init: { params: { path: { dialog_id: string } }; body: { content: string }; signal?: AbortSignal }) => Promise<SchemaDialogResponse>
+type PostMessage = (init: { params: { path: { dialog_id: string } }; body: SchemaMessageCreate; signal: AbortSignal }) => Promise<SchemaDialogResponse>
+
+async function streamMessage(init: Parameters<PostMessage>[0], onText?: (text: string) => void, onTool?: (tool: ChatToolCall) => void): Promise<SchemaDialogResponse> {
+  const { data, error, response } = await eventsFetch.POST('/dialogs/{dialog_id}/messages/stream', { ...init, parseAs: 'stream' })
+  if (error) throw error
+  if (!data || !response.ok) throw new Error('Dialog stream unavailable')
+  return readDialogStream(data, init.signal, onText, onTool)
+}
 
 async function ensureDialogId(createDialog: CreateDialog, signal: AbortSignal, chatId?: string): Promise<string> {
   if (chatId && isBackendDialogId(chatId)) return chatId
@@ -16,16 +24,16 @@ async function ensureDialogId(createDialog: CreateDialog, signal: AbortSignal, c
   return created.id
 }
 
-async function postDialogMessage(postMessage: PostMessage, createDialog: CreateDialog, content: string, signal: AbortSignal, chatId?: string): Promise<SchemaDialogResponse> {
+async function postDialogMessage(postMessage: PostMessage, createDialog: CreateDialog, body: SchemaMessageCreate, signal: AbortSignal, chatId?: string): Promise<SchemaDialogResponse> {
   const dialogId = await ensureDialogId(createDialog, signal, chatId)
   try {
-    return await postMessage({ params: { path: { dialog_id: dialogId } }, body: { content }, signal })
+    return await postMessage({ params: { path: { dialog_id: dialogId } }, body, signal })
   } catch (error) {
     if (isDialogPayload(error)) return error
-    if (!isDialogNotFound(error)) throw error
+    if (!isDialogNotFound(error) || body.clarification_id) throw error
     const created = await createDialog({ signal })
     try {
-      return await postMessage({ params: { path: { dialog_id: created.id } }, body: { content }, signal })
+      return await postMessage({ params: { path: { dialog_id: created.id } }, body, signal })
     } catch (retryError) {
       if (isDialogPayload(retryError)) return retryError
       throw retryError
@@ -36,7 +44,6 @@ async function postDialogMessage(postMessage: PostMessage, createDialog: CreateD
 export function useApiTransport(): ChatTransport {
   const queryClient = useQueryClient()
   const { mutateAsync: createDialog } = $api.useMutation('post', '/dialogs')
-  const { mutateAsync: postMessage } = $api.useMutation('post', '/dialogs/{dialog_id}/messages')
   const { mutateAsync: escalate } = $api.useMutation('post', '/dialogs/{dialog_id}/escalate')
   const { mutateAsync: deleteDialog } = $api.useMutation('delete', '/dialogs/{dialog_id}')
   const { mutateAsync: deleteDialogs } = $api.useMutation('delete', '/dialogs')
@@ -53,10 +60,12 @@ export function useApiTransport(): ChatTransport {
           invalidateDialogs()
           return { id: created.id }
         },
-        send: async (messages, signal, chatId) => {
-          const content = messages.at(-1)?.content.trim() ?? ''
+        send: async (messages, signal, chatId, onText, onTool) => {
+          const message = messages.at(-1)
+          const content = message?.content.trim() ?? ''
           if (!content) throw new Error('Empty message')
-          const reply = mapDialogResponse(await postDialogMessage(postMessage, createDialog, content, signal, chatId))
+          const body: SchemaMessageCreate = { content, ...(message?.clarificationId ? { clarification_id: message.clarificationId } : {}) }
+          const reply = mapDialogResponse(await postDialogMessage((init) => streamMessage(init, onText, onTool), createDialog, body, signal, chatId))
           invalidateDialogs()
           return reply
         },
@@ -90,6 +99,6 @@ export function useApiTransport(): ChatTransport {
         },
       }
     },
-    [createDialog, deleteDialog, deleteDialogs, escalate, postMessage, queryClient],
+    [createDialog, deleteDialog, deleteDialogs, escalate, queryClient],
   )
 }

@@ -1,6 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
-import { LuLoaderCircle, LuSparkles } from 'react-icons/lu'
-import type { Chat } from '@/features/chat/types'
+import { LuCheck, LuChevronDown, LuCircleAlert, LuClock, LuLoaderCircle, LuSparkles, LuWrench } from 'react-icons/lu'
+import type { Chat, ChatMessage, ChatToolStatus, ClarificationRequest } from '@/features/chat/types'
+import { pendingClarificationMessageId } from '@/features/chat/model'
+import ClarificationCard from './ClarificationCard'
 import ChatOutline from './ChatOutline'
 import MarkdownMessage from './MarkdownMessage'
 
@@ -13,16 +15,85 @@ interface ChatTranscriptProps {
   busy?: boolean
   afterMessages?: ReactNode
   onNearBottomChange?: (nearBottom: boolean) => void
+  onAnswerClarification?: (request: ClarificationRequest, content: string) => Promise<boolean>
 }
 
-const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onNearBottomChange }, ref) => {
+const toolStatuses = {
+  preparing: { label: 'Подготовка вызова', Icon: LuLoaderCircle, className: 'text-foreground/55' },
+  running: { label: 'Выполняется', Icon: LuLoaderCircle, className: 'text-primary' },
+  completed: { label: 'Завершено', Icon: LuCheck, className: 'text-foreground/55' },
+  error: { label: 'Ошибка', Icon: LuCircleAlert, className: 'text-red-600 dark:text-red-400' },
+  awaiting_user: { label: 'Ожидает вашего ответа', Icon: LuClock, className: 'text-primary' },
+} satisfies Record<ChatToolStatus, { label: string; Icon: typeof LuCheck; className: string }>
+
+function toolStatus(call: NonNullable<ChatMessage['toolCalls']>[number], pending = false): ChatToolStatus {
+  if (pending && 'status' in call) return call.status
+  if (typeof call.result.error === 'string') return 'error'
+  if (call.result.status === 'awaiting_user') return 'awaiting_user'
+  return 'completed'
+}
+
+const toolActivityLabels: Record<string, string> = {
+  search_knowledge: 'Ищем информацию…',
+  read_section: 'Изучаем инструкцию…',
+  ask_clarification: 'Уточняем вопрос…',
+  respond: 'Готовим ответ…',
+}
+
+function ToolActivity({ message }: { message: ChatMessage }) {
+  const calls = message.toolCalls ?? []
+  const running = message.pending ? calls.find((call) => ['preparing', 'running'].includes(toolStatus(call, true))) : undefined
+  return (
+    <details className="group/activity mb-2 text-xs">
+      <summary className="text-foreground/40 hover:text-foreground/65 focus-visible:outline-primary flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded py-1 focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden">
+        {running ? <LuLoaderCircle aria-hidden="true" className="size-3 shrink-0 animate-spin motion-reduce:animate-none" /> : <LuWrench aria-hidden="true" className="size-3 shrink-0" />}
+        <span aria-live={message.pending ? 'polite' : 'off'}>{running ? `${toolStatus(running, true) === 'preparing' ? 'Подготовка вызова' : toolActivityLabels[running.name] ?? 'Выполняется'} · ${running.name}` : 'Детали ответа'}</span>
+        <LuChevronDown aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/activity:rotate-180 motion-reduce:transition-none" />
+      </summary>
+      <ol aria-label="Вызовы инструментов" className="border-foreground/10 mt-1 max-h-72 space-y-2 overflow-y-auto border-l pl-3">
+        {calls.map((call) => {
+          const status = toolStatus(call, message.pending)
+          const { label, Icon, className } = toolStatuses[status]
+          return (
+            <li key={call.id} className="min-w-0">
+              <details>
+                <summary className="text-foreground/55 focus-visible:outline-primary flex cursor-pointer list-none flex-wrap items-center gap-1.5 rounded py-1 focus-visible:outline-2 [&::-webkit-details-marker]:hidden">
+                  <Icon aria-hidden="true" className={`size-3 shrink-0 ${className} ${['preparing', 'running'].includes(status) ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+                  <code className="break-all">{call.name}</code>
+                  <span className={className}>{label}</span>
+                </summary>
+                <div className="text-foreground/55 py-2">
+                  <p className="mb-1">Аргументы</p>
+                  <pre className="mb-2 font-mono break-words whitespace-pre-wrap">{JSON.stringify(call.arguments, null, 2)}</pre>
+                  {!['preparing', 'running'].includes(status) && (
+                    <>
+                      <p className="mb-1">Результат</p>
+                      <pre className="font-mono break-words whitespace-pre-wrap">{JSON.stringify(call.result, null, 2)}</pre>
+                    </>
+                  )}
+                </div>
+              </details>
+            </li>
+          )
+        })}
+      </ol>
+    </details>
+  )
+}
+
+const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onNearBottomChange, onAnswerClarification }, ref) => {
   const [activeMessage, setActiveMessage] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const previousChat = useRef(chat.id)
   const previousUserMessage = useRef<string | undefined>(undefined)
   const messages = chat.messages
+  const pendingClarificationId = pendingClarificationMessageId(chat)
+  const lastConfirmedUserIndex = messages.reduce((last, message, index) => message.role === 'user' && !message.pending ? index : last, -1)
   const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.id
+  const streamingMessage = messages.find((message) => message.role === 'assistant' && message.pending)
+  const latestContent = messages.at(-1)?.content
+  const latestTools = messages.at(-1)?.toolCalls
 
   useEffect(() => {
     const container = scrollRef.current
@@ -35,7 +106,7 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
     }
     previousChat.current = chat.id
     previousUserMessage.current = latestUserMessage
-  }, [chat.id, messages.length, latestUserMessage, busy, onNearBottomChange])
+  }, [chat.id, messages.length, latestContent, latestTools, latestUserMessage, busy, onNearBottomChange])
 
   useEffect(() => {
     const container = scrollRef.current
@@ -103,7 +174,7 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
             </section>
           ) : (
             <div className="space-y-8">
-              {messages.map((message) => (
+              {messages.map((message, index) => (
                 <article
                   key={message.id}
                   id={`message-${message.id}`}
@@ -117,15 +188,32 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                         <LuSparkles className="size-3" />
                       </span>
                     )}
-                    <span>{message.role === 'user' ? 'Вы' : message.kind === 'notice' ? 'Статус обращения' : 'Ассистент'}</span>
+                    <span>{message.role === 'user' ? 'Вы' : message.kind === 'notice' && !message.clarification ? 'Статус обращения' : 'Ассистент'}</span>
                     <time dateTime={message.createdAt} className="text-ui-small">
                       {new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                     </time>
                   </div>
+                  {message.role === 'assistant' && Boolean(message.toolCalls?.length) && <ToolActivity message={message} />}
                   {message.role === 'assistant' ? (
                     <MarkdownMessage content={message.content} />
                   ) : (
                     <div className="text-ui-body bg-surface-2 rounded-2xl rounded-tr-md px-5 py-3 leading-7 break-words whitespace-pre-wrap">{message.content}</div>
+                  )}
+                  {message.role === 'assistant' && message.pending && !message.toolCalls?.some((call) => ['preparing', 'running', 'awaiting_user'].includes(toolStatus(call, true))) && (
+                    <div role="status" className="text-foreground/50 text-ui-small mt-3 flex items-center gap-2">
+                      <LuLoaderCircle aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" />
+                      {message.content ? 'Пишем ответ…' : 'Готовим ответ…'}
+                    </div>
+                  )}
+                  {message.role === 'assistant' && message.clarification && (
+                    <ClarificationCard
+                      key={message.clarification.id}
+                      request={message.clarification}
+                      answered={index < lastConfirmedUserIndex}
+                      busy={busy}
+                      closed={chat.status === 'closed'}
+                      onAnswer={message.id === pendingClarificationId ? onAnswerClarification : undefined}
+                    />
                   )}
                   {message.kind === 'handoff' && chat.handoff?.simulated && <p className="text-foreground/45 text-ui-small mt-2">Демонстрация: реальная заявка не отправлена, связь со специалистом не установлена.</p>}
                 </article>
@@ -133,7 +221,7 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
             </div>
           )}
           {afterMessages}
-          {busy && (
+          {busy && !streamingMessage && (
             <div role="status" className="text-foreground/50 text-ui-body mt-6 flex items-center gap-2">
               <LuLoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
               Готовим ответ…

@@ -72,6 +72,7 @@ export default function ChatPage() {
               ref={transcriptRef}
               chat={chat.activeChat}
               busy={chat.busy}
+              onAnswerClarification={chat.answerClarification}
               onNearBottomChange={setNearBottom}
               afterMessages={
                 (chat.canFeedback || chat.activeChat.feedback) ? (

@@ -2,7 +2,7 @@ Be concise. Avoid overly long explanations. Provide direct answers, or apply cod
 
 ### About
 
-InnoSport is the InNoHassle supplier-portal support product from [TenderHack NN](https://github.com/one-zero-eight/hackathon-tenderhack-nn-innosport): a Russian-language chat UI and a FastAPI dialog API.
+Supplier-portal support product from [TenderHack NN](https://github.com/one-zero-eight/hackathon-tenderhack-nn-innosport): a Russian-language chat UI and a FastAPI dialog API.
 
 - Frontend (`frontend/`) — React 19, TypeScript, Tailwind 4, Vite, pnpm. Chat history, catalog-backed clarifications, specialist handoff, local-only feedback.
 - Backend (`backend/`) — Python 3.14, uv, FastAPI, MongoDB & Beanie. Answers from `data/topic_catalog.json` and Memvid BM25 (`data/knowledge.mv2`). Optional local llama.cpp. No cloud embeddings or web search.
@@ -15,6 +15,7 @@ DO NOT MAKE ridiculous fallbacks.
 DO NOT MAKE any backward compatibility shit unless requested.
 DO NOT EVER WRITE "try: import ... except", as all libraries are expected to be installed.
 DO NOT WRITE "from **future** import annotations", as Python 3.14+ uses deferred annotations by default.
+DO NOT WRITE TESTS.
 DO NOT USE `response_model=` in route decorator, use type hints instead:
 
     ```python
