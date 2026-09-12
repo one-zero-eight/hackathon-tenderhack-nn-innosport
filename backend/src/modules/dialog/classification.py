@@ -4,14 +4,12 @@ from functools import lru_cache
 
 import httpx
 from fastapi import HTTPException
-from pydantic import Field
 
 from src.config_schema import LlamaCppSettings, MlxSettings, ModelProvider, Settings
 from src.logging_ import logger
 from src.modules.dialog.catalog import load_knowledge
 from src.modules.dialog.models import KnowledgeBase
-from src.modules.dialog.schemas import DialogView
-from src.pydantic_base import BaseSchema
+from src.modules.dialog.schemas import ClassificationDecision, DialogClassification, DialogView
 
 CLASSIFICATION_INSTRUCTIONS = """Ты классификатор обращений поддержки Портала поставщиков.
 Выбери одну подтему из переданного каталога по запросу пользователя с учётом всей переписки и уточнений.
@@ -24,18 +22,6 @@ CLASSIFICATION_INSTRUCTIONS = """Ты классификатор обращен�
 В reason кратко объясни выбор или невозможность классификации на русском, без персональных данных,
 секретов и цитирования переписки. Ответ специалиста и закрытие обращения не меняют тему запроса.
 """
-
-
-class ClassificationDecision(BaseSchema):
-    subtopic_id: str | None
-    reason: str = Field(min_length=1, max_length=500)
-
-
-class DialogClassification(ClassificationDecision):
-    topic: str | None
-    subtopic: str | None
-    generated_at: dtm.datetime
-    dialog_updated_at: dtm.datetime | None
 
 
 @lru_cache(maxsize=1)

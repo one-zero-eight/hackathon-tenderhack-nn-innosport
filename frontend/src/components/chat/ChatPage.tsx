@@ -7,12 +7,15 @@ import { $api } from '@/api'
 import { isBackendDialogId, useApiTransport } from '@/features/chat/api-transport'
 import { useChat } from '@/features/chat/useChat'
 import { isDialogNotFound } from '@/features/chat/dialog-map'
+import { createChat } from '@/features/chat/model'
 import ChatSidebar from './ChatSidebar'
 import ChatComposer from './ChatComposer'
 import SpecialistContact from './SpecialistContact'
 import BotFeedbackCard from './BotFeedbackCard'
 import ChatStatusActions from './ChatStatusActions'
 import ChatTranscript, { type ChatTranscriptHandle } from './ChatTranscript'
+
+const emptyChat = createChat('', '')
 
 export default function ChatPage() {
   const dialogId = useMatch({ from: '/_chat/tickets/$dialogId', shouldThrow: false, select: (match) => match.params.dialogId })
@@ -33,13 +36,14 @@ export default function ChatPage() {
   const dialogQuery = $api.useQuery('get', '/dialogs/{dialog_id}', { params: { path: { dialog_id: requestedId } } }, { enabled: isBackendDialogId(requestedId) })
   const dialog = dialogQuery.data
   const [newDraft, setNewDraft] = useState('')
-  const [startingChat, setStartingChat] = useState(false)
-  const startingChatRef = useRef(false)
+  const startingRequest = useRef(false)
+  const isNewChat = !dialogId
+  const activeChat = isNewChat ? emptyChat : chat.activeChat
   const [leftOpen, setLeftOpen] = useState(false)
   const [nearBottom, setNearBottom] = useState(true)
   const transcriptRef = useRef<ChatTranscriptHandle>(null)
-  const messages = chat.activeChat.messages
-  const closed = chat.activeChat.status === 'closed'
+  const messages = activeChat.messages
+  const closed = activeChat.status === 'closed'
 
   const { syncList, syncDialog, selectChat, chats } = chat
 
@@ -55,29 +59,28 @@ export default function ChatPage() {
     if (dialogId) selectChat(dialogId)
   }, [dialogId, chats, selectChat])
 
-  const routeReady = dialogId === chat.activeChatId
+  const routeReady = !dialogId || dialogId === chat.activeChatId
   const missingLocalChat = Boolean(dialogId && !isBackendDialogId(dialogId) && !chat.chats.some((item) => item.id === dialogId))
   const routeError = missingLocalChat || dialogQuery.isError
   const notFound = missingLocalChat || isDialogNotFound(dialogQuery.error)
 
   const createTicket = async () => {
+    setNewDraft('')
     await navigate({ to: '/' })
     setLeftOpen(false)
   }
 
-  const sendNewRequest = async (text: string): Promise<boolean> => {
-    if (startingChatRef.current || !text.trim()) return false
-    startingChatRef.current = true
-    setStartingChat(true)
+  const startRequest = async (action: () => Promise<boolean>): Promise<boolean> => {
+    if (startingRequest.current) return false
+    startingRequest.current = true
     try {
-      const created = await chat.createChat()
-      chat.setDraft(text)
+      const created = chat.createDraft()
+      chat.setDraft(newDraft)
       await navigate({ to: '/tickets/$dialogId', params: { dialogId: created.id } })
       setNewDraft('')
-      return await chat.send(text)
+      return await action()
     } finally {
-      startingChatRef.current = false
-      setStartingChat(false)
+      startingRequest.current = false
     }
   }
 
@@ -107,15 +110,7 @@ export default function ChatPage() {
             <Button variant="ghost" className="bg-background/90 absolute top-4 left-4 z-20 p-2 shadow-sm backdrop-blur md:hidden" aria-label="Открыть список обращений" onClick={() => setLeftOpen(true)}>
               <LuPanelLeft className="size-5" />
             </Button>
-            {!dialogId ? (
-              <div className="m-auto w-full max-w-3xl space-y-6 px-4 py-16 sm:px-8">
-                <div className="space-y-2 text-center">
-                  <h1 className="text-ui-title font-semibold tracking-tight">Чем можем помочь?</h1>
-                  <p className="text-foreground/50 text-ui-body">Задайте вопрос о работе на Портале поставщиков.</p>
-                </div>
-                <ChatComposer draft={newDraft} onDraft={setNewDraft} onSend={sendNewRequest} busy={startingChat} />
-              </div>
-            ) : routeError ? (
+            {routeError ? (
               <div role="alert" className="m-auto space-y-3 p-6 text-center">
                 <p>{notFound ? 'Обращение не найдено.' : 'Не удалось загрузить обращение.'}</p>
                 {!notFound && (
@@ -135,12 +130,12 @@ export default function ChatPage() {
               <>
                 <ChatTranscript
                   ref={transcriptRef}
-                  chat={chat.activeChat}
-                  busy={chat.busy}
+                  chat={activeChat}
+                  busy={!isNewChat && chat.busy}
                   onAnswerClarification={chat.answerClarification}
                   onNearBottomChange={setNearBottom}
                   afterMessages={
-                    chat.canFeedback || chat.activeChat.feedback ? (
+                    !isNewChat && (chat.canFeedback || chat.activeChat.feedback) ? (
                       <BotFeedbackCard
                         key={chat.activeChatId}
                         feedback={chat.activeChat.feedback}
@@ -154,12 +149,12 @@ export default function ChatPage() {
                 />
                 <div className="bg-background shrink-0 px-4 pt-2 pb-4 sm:px-8">
                   <div className="mx-auto max-w-3xl">
-                    {chat.error && (
+                    {!isNewChat && chat.error && (
                       <p role="alert" className="border-error/20 bg-error/5 text-error text-ui-body mb-3 rounded-xl border p-3">
                         {chat.error}
                       </p>
                     )}
-                    {chat.activeChat.handoff && (
+                    {!isNewChat && chat.activeChat.handoff && (
                       <p role="status" className="text-primary text-ui-body mb-3 text-center">
                         {closed
                           ? chat.activeChat.handoff.simulated
@@ -172,7 +167,7 @@ export default function ChatPage() {
                     )}
                     <ChatStatusActions
                       closed={closed}
-                      busy={chat.busy}
+                      busy={!isNewChat && chat.busy}
                       latestAction={
                         !nearBottom && messages.length > 0 ? (
                           <Button variant="outline" size="sm" aria-label="К последнему сообщению" onClick={() => transcriptRef.current?.scrollToBottom()} className="bg-background flex items-center gap-2 rounded-full">
@@ -181,11 +176,20 @@ export default function ChatPage() {
                           </Button>
                         ) : undefined
                       }
-                      onClose={chat.closeChat}
-                      onReopen={chat.reopenChat}
+                      onClose={() => void (isNewChat ? createTicket() : chat.closeChat())}
+                      onNewChat={() => void createTicket()}
                     />
-                    {chat.canContactSpecialist && <SpecialistContact key={chat.activeChatId} busy={chat.busy} onContact={chat.contactSpecialist} />}
-                    {!closed && <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} />}
+                    {(isNewChat || chat.canContactSpecialist) && (
+                      <SpecialistContact key={activeChat.id} busy={!isNewChat && chat.busy} onContact={isNewChat ? (contact) => startRequest(() => chat.contactSpecialist(contact)) : chat.contactSpecialist} />
+                    )}
+                    {!closed && (
+                      <ChatComposer
+                        draft={isNewChat ? newDraft : chat.draft}
+                        onDraft={isNewChat ? setNewDraft : chat.setDraft}
+                        onSend={isNewChat ? (text) => (text.trim() ? startRequest(() => chat.send(text)) : Promise.resolve(false)) : chat.send}
+                        busy={!isNewChat && chat.busy}
+                      />
+                    )}
                   </div>
                 </div>
               </>

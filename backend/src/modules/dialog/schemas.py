@@ -141,5 +141,46 @@ class DialogSummary(DialogSummaryContent):
     dialog_updated_at: dtm.datetime | None
 
 
+class ClassificationDecision(BaseSchema):
+    subtopic_id: str | None
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class DialogClassification(ClassificationDecision):
+    topic: str | None
+    subtopic: str | None
+    generated_at: dtm.datetime
+    dialog_updated_at: dtm.datetime | None
+
+
+class AnalyticsDay(BaseSchema):
+    date: dtm.date
+    total: int
+    escalated: int
+
+
+class AnalyticsBucket(BaseSchema):
+    label: str
+    count: int
+
+
+class DialogAnalytics(BaseSchema):
+    days: int
+    generated_at: dtm.datetime
+    total_closed: int
+    analyzed: int
+    pending: int
+    classified: int
+    with_remaining_questions: int
+    summarized: int
+    rated: int
+    complete_ratings: int
+    daily: list[AnalyticsDay]
+    topics: list[AnalyticsBucket]
+    subtopics: list[AnalyticsBucket]
+    outcomes: list[AnalyticsBucket]
+    ratings: list[AnalyticsBucket]
+
+
 class DialogDeleteResult(BaseSchema):
     deleted: int

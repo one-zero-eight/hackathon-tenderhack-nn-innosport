@@ -5,10 +5,14 @@ from typing import ClassVar
 from beanie import PydanticObjectId
 from pydantic import Field
 
+from src.modules.dialog.analytics import AnalyticsAccumulator
 from src.modules.dialog.schemas import (
     Clarification,
+    DialogAnalytics,
+    DialogClassification,
     DialogFeedback,
     DialogStatus,
+    DialogSummary,
     SpecialistContact,
     SupportLine,
     ToolCall,
@@ -41,6 +45,10 @@ class ConversationSchema(BaseSchema):
     revision: int = 0
     clarification: Clarification | None = None
     closed: bool = False
+    closed_at: dtm.datetime | None = None
+    summary: DialogSummary | None = None
+    classification: DialogClassification | None = None
+    insights_retry_at: dtm.datetime | None = None
     status: DialogStatus | None = None
     line: SupportLine | None = None
     reason: str | None = None
@@ -56,7 +64,7 @@ class Conversation(ConversationSchema, CustomDocument):
         name = "conversations"
         keep_nulls = False
         max_nesting_depth = 1
-        indexes: ClassVar[list[str]] = ["updated_at", "feedback.submitted_at"]
+        indexes: ClassVar[list[str]] = ["updated_at", "feedback.submitted_at", "closed_at", "insights_retry_at"]
 
 
 def _document_updated_at(document: Conversation) -> dtm.datetime:
@@ -79,6 +87,10 @@ def document_to_state(document: Conversation) -> ConversationState:
         revision=document.revision,
         clarification=document.clarification,
         closed=document.closed,
+        closed_at=document.closed_at or (document.updated_at if document.closed else None),
+        summary=document.summary,
+        classification=document.classification,
+        insights_retry_at=document.insights_retry_at,
         status=document.status,
         line=document.line,
         reason=document.reason,
@@ -136,13 +148,21 @@ class MongoConversationStore:
                     {"revision": {"$exists": False}},
                 ]
             }
-        state.updated_at = utcnow()
+        if state.closed:
+            state.summary = None
+            state.classification = None
+            state.insights_retry_at = None
+        updated_at = utcnow()
         result = await Conversation.get_motor_collection().update_one(
             {"_id": object_id, **revision_filter},
             {
                 "$set": {
                     "clarification": state.clarification.model_dump(mode="python") if state.clarification else None,
                     "closed": state.closed,
+                    "closed_at": state.closed_at,
+                    "summary": state.summary.model_dump(mode="python") if state.summary else None,
+                    "classification": state.classification.model_dump(mode="python") if state.classification else None,
+                    "insights_retry_at": state.insights_retry_at,
                     "status": state.status,
                     "line": state.line,
                     "reason": state.reason,
@@ -150,7 +170,7 @@ class MongoConversationStore:
                     "specialist_contact": state.specialist_contact.model_dump(mode="python")
                     if state.specialist_contact
                     else None,
-                    "updated_at": state.updated_at,
+                    "updated_at": updated_at,
                     "citations": [
                         ConversationCitationSchema(
                             document=item.document,
@@ -174,7 +194,85 @@ class MongoConversationStore:
         )
         if result.matched_count != 1:
             raise ConversationConflictError(state.id)
+        state.updated_at = updated_at
         state.revision += 1
+
+    async def save_insights(self, state: ConversationState) -> None:
+        revision_filter: dict = {"revision": state.revision}
+        if state.revision == 0:
+            revision_filter = {"$or": [{"revision": 0}, {"revision": {"$exists": False}}]}
+        result = await Conversation.get_motor_collection().update_one(
+            {"_id": self._object_id(state.id), "closed": True, **revision_filter},
+            [
+                {
+                    "$set": {
+                        "closed_at": {"$ifNull": ["$closed_at", "$updated_at"]},
+                        "summary": {"$literal": state.summary.model_dump(mode="python") if state.summary else None},
+                        "classification": {
+                            "$literal": state.classification.model_dump(mode="python") if state.classification else None
+                        },
+                        "insights_retry_at": {"$literal": state.insights_retry_at},
+                        "revision": {"$add": [{"$ifNull": ["$revision", 0]}, 1]},
+                    }
+                }
+            ],
+        )
+        if result.matched_count != 1:
+            raise ConversationConflictError(state.id)
+        state.revision += 1
+
+    @staticmethod
+    def _current_expression(field: str) -> dict:
+        return {
+            "$and": [
+                {"$ne": [{"$ifNull": [f"${field}", None]}, None]},
+                {"$ne": [{"$ifNull": ["$updated_at", None]}, None]},
+                {"$eq": [{"$ifNull": [f"${field}.dialog_updated_at", None]}, "$updated_at"]},
+            ]
+        }
+
+    async def pending_insights(self, *, limit: int = 10) -> list[ConversationState]:
+        query = {
+            "closed": True,
+            "$and": [
+                {"$or": [{"insights_retry_at": None}, {"insights_retry_at": {"$lte": utcnow()}}]},
+                {
+                    "$or": [
+                        {"closed_at": None, "updated_at": {"$type": "date"}},
+                        {"$expr": {"$not": [self._current_expression("summary")]}},
+                        {"$expr": {"$not": [self._current_expression("classification")]}},
+                    ]
+                },
+            ],
+        }
+        documents = await Conversation.find(query).sort("insights_retry_at", "updated_at", "_id").limit(limit).to_list()
+        return [document_to_state(document) for document in documents]
+
+    async def analytics(self, *, days: int) -> DialogAnalytics:
+        result = AnalyticsAccumulator(days)
+        pipeline = [
+            {"$match": {"closed": True}},
+            {"$set": {"closed_at": {"$ifNull": ["$closed_at", "$updated_at"]}}},
+            {"$match": {"closed_at": {"$gte": result.start, "$lt": result.end}}},
+            {
+                "$project": {
+                    "_id": 0,
+                    "closed_at": 1,
+                    "reason": 1,
+                    "status": 1,
+                    "line": 1,
+                    "summary_current": self._current_expression("summary"),
+                    "classification_current": self._current_expression("classification"),
+                    "remaining_questions": {"$gt": [{"$size": {"$ifNull": ["$summary.remaining_questions", []]}}, 0]},
+                    "topic": "$classification.topic",
+                    "subtopic": "$classification.subtopic",
+                    "rating": "$feedback.rating",
+                }
+            },
+        ]
+        async for row in Conversation.get_motor_collection().aggregate(pipeline):
+            result.add(row)
+        return result.result()
 
     async def delete(self, dialog_id: str) -> bool:
         object_id = self._object_id(dialog_id)

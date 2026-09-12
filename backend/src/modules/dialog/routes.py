@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.api import docs
-from src.modules.dialog.classification import DialogClassification, classify_dialog
+from src.modules.dialog.insights import DialogInsightsService
 from src.modules.dialog.schemas import (
+    DialogAnalytics,
+    DialogClassification,
     DialogDeleteResult,
     DialogFeedback,
     DialogFeedbackCreate,
@@ -18,7 +20,6 @@ from src.modules.dialog.schemas import (
     SpecialistContact,
 )
 from src.modules.dialog.service import DialogClosedError, DialogService
-from src.modules.dialog.summary import summarize_dialog
 
 router = APIRouter(tags=["dialog"])
 docs.TAGS_INFO.append(
@@ -36,16 +37,25 @@ def get_dialog_service(request: Request) -> DialogService:
 DialogServiceDep = Annotated[DialogService, Depends(get_dialog_service)]
 
 
+def get_insights_service(service: DialogServiceDep) -> DialogInsightsService:
+    from src.config import settings
+
+    return DialogInsightsService(service, settings)
+
+
+DialogInsightsDep = Annotated[DialogInsightsService, Depends(get_insights_service)]
+
+
 class DialogStreamingResponse(StreamingResponse):
     media_type = "application/x-ndjson"
 
 
-@router.post("/dialogs", response_model=DialogView)
+@router.post("/dialogs")
 async def create_dialog(service: DialogServiceDep) -> DialogView:
     return await service.create()
 
 
-@router.get("/dialogs", response_model=list[DialogListItem])
+@router.get("/dialogs")
 async def list_dialogs(
     service: DialogServiceDep,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
@@ -53,31 +63,37 @@ async def list_dialogs(
     return await service.list_dialogs(limit=limit)
 
 
-@router.delete("/dialogs", response_model=DialogDeleteResult)
+@router.delete("/dialogs")
 async def delete_dialogs(service: DialogServiceDep) -> DialogDeleteResult:
     return await service.delete_all()
 
 
-@router.get("/dialogs/{dialog_id}", response_model=DialogView)
+@router.get("/dialogs/analytics")
+async def get_dialog_analytics(
+    service: DialogServiceDep,
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
+) -> DialogAnalytics:
+    return await service.store.analytics(days=days)
+
+
+@router.get("/dialogs/{dialog_id}")
 async def get_dialog(dialog_id: str, service: DialogServiceDep) -> DialogView:
     return await service.get(dialog_id)
 
 
 @router.get("/dialogs/{dialog_id}/summary")
-async def get_dialog_summary(dialog_id: str, service: DialogServiceDep) -> DialogSummary:
-    """Summarize the complete saved transcript without modifying the appeal."""
-    from src.config import settings
-
-    dialog = await service.get(dialog_id)
-    return await summarize_dialog(dialog, settings)
+async def get_dialog_summary(dialog_id: str, service: DialogInsightsDep) -> DialogSummary:
+    return await service.summary(dialog_id)
 
 
 @router.get("/dialogs/{dialog_id}/classification")
-async def get_dialog_classification(dialog_id: str, service: DialogServiceDep) -> DialogClassification:
-    """Classify the saved transcript using catalog topics without modifying the appeal."""
-    from src.config import settings
+async def get_dialog_classification(dialog_id: str, service: DialogInsightsDep) -> DialogClassification:
+    return await service.classification(dialog_id)
 
-    return await classify_dialog(await service.get(dialog_id), settings)
+
+@router.post("/dialogs/{dialog_id}/close")
+async def close_dialog(dialog_id: str, service: DialogServiceDep) -> DialogResponse:
+    return await service.close(dialog_id)
 
 
 @router.put("/dialogs/{dialog_id}/feedback")
@@ -85,7 +101,7 @@ async def submit_feedback(dialog_id: str, payload: DialogFeedbackCreate, service
     return await service.submit_feedback(dialog_id, payload)
 
 
-@router.delete("/dialogs/{dialog_id}", response_model=DialogDeleteResult)
+@router.delete("/dialogs/{dialog_id}")
 async def delete_dialog(dialog_id: str, service: DialogServiceDep) -> DialogDeleteResult:
     return await service.delete(dialog_id)
 

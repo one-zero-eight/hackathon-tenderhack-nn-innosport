@@ -13,6 +13,7 @@ import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as ChatTicketsDialogIdRouteImport } from './routes/_chat.tickets.$dialogId'
 import { Route as AdminTicketsDialogIdRouteImport } from './routes/admin.tickets.$dialogId'
@@ -36,6 +37,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAuditRoute = AdminAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -55,12 +61,14 @@ const AdminTicketsDialogIdRoute = AdminTicketsDialogIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/': typeof AdminIndexRoute
   '/tickets/$dialogId': typeof ChatTicketsDialogIdRoute
   '/admin/tickets/$dialogId': typeof AdminTicketsDialogIdRoute
 }
 export interface FileRoutesByTo {
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/': typeof ChatIndexRoute
   '/admin': typeof AdminIndexRoute
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_chat': typeof ChatRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/_chat/': typeof ChatIndexRoute
   '/admin/': typeof AdminIndexRoute
@@ -82,12 +91,14 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/admin/analytics'
     | '/admin/audit'
     | '/admin/'
     | '/tickets/$dialogId'
     | '/admin/tickets/$dialogId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/admin/analytics'
     | '/admin/audit'
     | '/'
     | '/admin'
@@ -97,6 +108,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_chat'
     | '/admin'
+    | '/admin/analytics'
     | '/admin/audit'
     | '/_chat/'
     | '/admin/'
@@ -139,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/audit': {
       id: '/admin/audit'
       path: '/audit'
@@ -176,12 +195,14 @@ const ChatRouteChildren: ChatRouteChildren = {
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
 interface AdminRouteChildren {
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminAuditRoute: typeof AdminAuditRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminTicketsDialogIdRoute: typeof AdminTicketsDialogIdRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminAuditRoute: AdminAuditRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminTicketsDialogIdRoute: AdminTicketsDialogIdRoute,

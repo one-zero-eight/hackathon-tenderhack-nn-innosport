@@ -16,7 +16,6 @@ import {
   isSpecialistResponse,
   pendingClarificationMessageId,
   parseChatHistory,
-  reopenChat as reopenChatModel,
   serializeChatHistory,
   submitFeedback as submitFeedbackModel,
   withOnlyChat,
@@ -37,8 +36,7 @@ function loadHistory(): ChatHistory {
   } catch {
     // Privacy settings, unavailable storage, and SSR all use in-memory history.
   }
-  const chat = createChat(newId(), new Date().toISOString())
-  return { version: CHAT_STORAGE_VERSION, chats: [chat], activeChatId: chat.id }
+  return { version: CHAT_STORAGE_VERSION, chats: [], activeChatId: '' }
 }
 
 export interface UseChatResult {
@@ -49,6 +47,7 @@ export interface UseChatResult {
   draft: string
   setDraft: (text: string) => void
   createChat: () => Chat | Promise<Chat>
+  createDraft: () => Chat
   selectChat: (id: string) => void
   deleteChat: (id: string) => Promise<boolean>
   deleteAllChats: () => Promise<boolean>
@@ -56,8 +55,7 @@ export interface UseChatResult {
   syncDialog: (view: SchemaDialogView) => void
   send: (text: string) => Promise<boolean>
   answerClarification: (request: ClarificationRequest, content: string) => Promise<boolean>
-  closeChat: () => void
-  reopenChat: () => void
+  closeChat: () => Promise<boolean>
   contactSpecialist: (contact: SchemaSpecialistContact) => Promise<boolean>
   submitFeedback: (rating: FeedbackRating, comment: string) => Promise<boolean>
   dismissFeedback: () => void
@@ -140,6 +138,12 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
     return chat
   }, [allocateChat, commitHistory])
 
+  const createDraft = useCallback(() => {
+    const chat = createChat(newId(), new Date().toISOString())
+    commitHistory({ ...historyRef.current, chats: [chat, ...historyRef.current.chats], activeChatId: chat.id }, false)
+    return chat
+  }, [commitHistory])
+
   const syncList = useCallback(
     (items: readonly SchemaDialogListItem[]) => {
       const current = historyRef.current
@@ -155,7 +159,7 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
         }
       }
       if (next.chats.length === 0) {
-        commitHistory(withOnlyChat(createChat(newId(), new Date().toISOString())))
+        commitHistory({ ...next, chats: [], activeChatId: '' })
         return
       }
       if (next !== historyRef.current) commitHistory(next)
@@ -323,27 +327,36 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
     [commitHistory],
   )
 
-  const closeChat = useCallback((): void => {
+  const closeChat = useCallback(async (): Promise<boolean> => {
     const chatId = historyRef.current.activeChatId
-    operations.current.get(chatId)?.abort()
-    operations.current.delete(chatId)
-    setBusyChats((current) => ({ ...current, [chatId]: false }))
-    setPendingMessages((current) => {
-      const next = { ...current }
-      delete next[chatId]
-      return next
-    })
-    setStreamingMessages((current) => {
-      const next = { ...current }
-      delete next[chatId]
-      return next
-    })
-    updateActiveChat((chat) => closeChatModel(chat, newId(), new Date().toISOString()))
-  }, [updateActiveChat])
-
-  const reopenChat = useCallback((): void => {
-    updateActiveChat((chat) => reopenChatModel(chat, newId(), new Date().toISOString()))
-  }, [updateActiveChat])
+    const chat = historyRef.current.chats.find((item) => item.id === chatId)
+    if (!chat || chat.status === 'closed' || operations.current.has(chatId)) return false
+    const controller = new AbortController()
+    operations.current.set(chatId, controller)
+    setBusyChats((current) => ({ ...current, [chatId]: true }))
+    setErrors((current) => ({ ...current, [chatId]: null }))
+    try {
+      const result = await transport.close?.(chatId, controller.signal)
+      if (!mounted.current || controller.signal.aborted) return false
+      const latest = historyRef.current
+      const closedAt = result?.updatedAt ?? new Date().toISOString()
+      commitHistory({
+        ...latest,
+        chats: latest.chats.map((item) => (item.id === chatId ? closeChatModel(item, newId(), closedAt) : item)),
+      })
+      return true
+    } catch {
+      if (mounted.current && !controller.signal.aborted) {
+        setErrors((current) => ({ ...current, [chatId]: 'Не удалось закрыть обращение. Попробуйте ещё раз.' }))
+      }
+      return false
+    } finally {
+      if (operations.current.get(chatId) === controller) {
+        operations.current.delete(chatId)
+        if (mounted.current) setBusyChats((current) => ({ ...current, [chatId]: false }))
+      }
+    }
+  }, [commitHistory, transport])
 
   const submitFeedback = useCallback(
     async (rating: FeedbackRating, comment: string): Promise<boolean> => {
@@ -512,7 +525,7 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
       messages: [...chat.messages, { ...pending, pending: true }, ...(streaming && (streaming.content || streaming.toolCalls?.length) ? [streaming] : [])],
     }
   })
-  const activeChat = chats.find((chat) => chat.id === history.activeChatId) ?? chats[0]
+  const activeChat = chats.find((chat) => chat.id === history.activeChatId) ?? chats[0] ?? createChat('', '')
   return {
     chats,
     activeChat,
@@ -521,6 +534,7 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
     draft: drafts[activeChat.id] ?? '',
     setDraft,
     createChat: startChat,
+    createDraft,
     selectChat,
     deleteChat,
     deleteAllChats,
@@ -529,7 +543,6 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
     send,
     answerClarification,
     closeChat,
-    reopenChat,
     contactSpecialist,
     submitFeedback,
     dismissFeedback,

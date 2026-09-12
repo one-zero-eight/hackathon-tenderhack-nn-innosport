@@ -12,7 +12,9 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
 
 export default function AdminPage() {
   const auditActive = Boolean(useMatch({ from: '/admin/audit', shouldThrow: false }))
-  const listQuery = $api.useQuery('get', '/dialogs', { params: { query: { limit: 500 } } }, { enabled: !auditActive })
+  const analyticsActive = Boolean(useMatch({ from: '/admin/analytics', shouldThrow: false }))
+  const ticketsActive = !auditActive && !analyticsActive
+  const listQuery = $api.useQuery('get', '/dialogs', { params: { query: { limit: 500 } } }, { enabled: ticketsActive })
   const dialogs = listQuery.data ?? []
 
   return (
@@ -24,8 +26,8 @@ export default function AdminPage() {
             <Link
               to="/admin"
               activeOptions={{ exact: true }}
-              aria-current={!auditActive ? 'page' : undefined}
-              className={`focus-visible:ring-primary -mb-px border-b-2 px-1 py-3 text-sm font-medium outline-none focus-visible:ring-2 ${!auditActive ? 'border-primary text-primary' : 'text-foreground/60 hover:text-foreground border-transparent'}`}
+              aria-current={ticketsActive ? 'page' : undefined}
+              className={`focus-visible:ring-primary -mb-px border-b-2 px-1 py-3 text-sm font-medium outline-none focus-visible:ring-2 ${ticketsActive ? 'border-primary text-primary' : 'text-foreground/60 hover:text-foreground border-transparent'}`}
             >
               Обращения
             </Link>
@@ -37,13 +39,21 @@ export default function AdminPage() {
             >
               Аудит
             </Link>
+            <Link
+              to="/admin/analytics"
+              activeProps={{ className: 'border-primary text-primary' }}
+              inactiveProps={{ className: 'border-transparent text-foreground/60 hover:text-foreground' }}
+              className="focus-visible:ring-primary -mb-px border-b-2 px-1 py-3 text-sm font-medium outline-none focus-visible:ring-2"
+            >
+              Аналитика
+            </Link>
           </nav>
           <Link to="/" className="text-foreground/60 hover:text-foreground focus-visible:ring-primary text-ui-small rounded py-3 outline-none focus-visible:ring-2">
             На главную
           </Link>
         </header>
-        <div className={auditActive ? 'flex min-h-0 flex-1 flex-col' : 'grid min-h-0 flex-1 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] gap-4 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1'}>
-          {!auditActive && (
+        <div className={!ticketsActive ? 'flex min-h-0 flex-1 flex-col' : 'grid min-h-0 flex-1 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] gap-4 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1'}>
+          {ticketsActive && (
             <aside aria-labelledby="admin-appeals-title" className="border-border bg-surface flex min-h-0 flex-col overflow-hidden rounded-2xl border">
               <header className="border-border shrink-0 border-b px-4 py-4">
                 <h2 id="admin-appeals-title" className="text-ui-title font-semibold">

@@ -77,6 +77,17 @@ class DialogService:
     async def list_dialogs(self, *, limit: int = 100) -> list[DialogListItem]:
         return [self._list_item(state) for state in await self.store.list(limit=limit)]
 
+    async def close(self, dialog_id: str) -> DialogResponse:
+        state = (await self._require(dialog_id)).model_copy(deep=True)
+        if not state.closed:
+            state.closed = True
+            state.closed_at = utcnow()
+            state.reason = "user_closed"
+            state.clarification = None
+            await self._save(state)
+        reply = next((item.content for item in reversed(state.messages) if item.role == "assistant"), "")
+        return self._view(state, reply=reply)
+
     async def submit_feedback(self, dialog_id: str, payload: DialogFeedbackCreate) -> DialogFeedback:
         state = (await self._require(dialog_id)).model_copy(deep=True)
         feedback = DialogFeedback(**payload.model_dump(), submitted_at=utcnow())
@@ -398,6 +409,8 @@ class DialogService:
         state.clarification = clarification
         state.status = status
         state.closed = closed
+        if closed and state.closed_at is None:
+            state.closed_at = utcnow()
         state.reason = reason
         state.line = line
         state.citations = []

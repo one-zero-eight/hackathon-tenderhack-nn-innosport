@@ -23,6 +23,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dialogs/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dialog Analytics */
+        get: operations["get_dialog_analytics_dialogs_analytics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dialogs/{dialog_id}": {
         parameters: {
             query?: never;
@@ -48,10 +65,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Dialog Summary
-         * @description Summarize the complete saved transcript without modifying the appeal.
-         */
+        /** Get Dialog Summary */
         get: operations["get_dialog_summary_dialogs__dialog_id__summary_get"];
         put?: never;
         post?: never;
@@ -68,13 +82,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Dialog Classification
-         * @description Classify the saved transcript using catalog topics without modifying the appeal.
-         */
+        /** Get Dialog Classification */
         get: operations["get_dialog_classification_dialogs__dialog_id__classification_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dialogs/{dialog_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Dialog */
+        post: operations["close_dialog_dialogs__dialog_id__close_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -196,6 +224,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalyticsBucket */
+        AnalyticsBucket: {
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+        };
+        /** AnalyticsDay */
+        AnalyticsDay: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Total */
+            total: number;
+            /** Escalated */
+            escalated: number;
+        };
         /** AuditDialog */
         AuditDialog: {
             /** Id */
@@ -291,6 +338,42 @@ export interface components {
             options: string[];
             /** Id */
             id: string;
+        };
+        /** DialogAnalytics */
+        DialogAnalytics: {
+            /** Days */
+            days: number;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Total Closed */
+            total_closed: number;
+            /** Analyzed */
+            analyzed: number;
+            /** Pending */
+            pending: number;
+            /** Classified */
+            classified: number;
+            /** With Remaining Questions */
+            with_remaining_questions: number;
+            /** Summarized */
+            summarized: number;
+            /** Rated */
+            rated: number;
+            /** Complete Ratings */
+            complete_ratings: number;
+            /** Daily */
+            daily: components["schemas"]["AnalyticsDay"][];
+            /** Topics */
+            topics: components["schemas"]["AnalyticsBucket"][];
+            /** Subtopics */
+            subtopics: components["schemas"]["AnalyticsBucket"][];
+            /** Outcomes */
+            outcomes: components["schemas"]["AnalyticsBucket"][];
+            /** Ratings */
+            ratings: components["schemas"]["AnalyticsBucket"][];
         };
         /** DialogClassification */
         DialogClassification: {
@@ -538,6 +621,8 @@ export interface components {
     headers: never;
     pathItems: never;
 }
+export type SchemaAnalyticsBucket = components['schemas']['AnalyticsBucket'];
+export type SchemaAnalyticsDay = components['schemas']['AnalyticsDay'];
 export type SchemaAuditDialog = components['schemas']['AuditDialog'];
 export type SchemaAuditEmailResponse = components['schemas']['AuditEmailResponse'];
 export type SchemaAuditFeedback = components['schemas']['AuditFeedback'];
@@ -547,6 +632,7 @@ export type SchemaAuditRequest = components['schemas']['AuditRequest'];
 export type SchemaAuditResponse = components['schemas']['AuditResponse'];
 export type SchemaCitation = components['schemas']['Citation'];
 export type SchemaClarification = components['schemas']['Clarification'];
+export type SchemaDialogAnalytics = components['schemas']['DialogAnalytics'];
 export type SchemaDialogClassification = components['schemas']['DialogClassification'];
 export type SchemaDialogDeleteResult = components['schemas']['DialogDeleteResult'];
 export type SchemaDialogFeedback = components['schemas']['DialogFeedback'];
@@ -634,6 +720,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DialogDeleteResult"];
+                };
+            };
+        };
+    };
+    get_dialog_analytics_dialogs_analytics_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialogAnalytics"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -749,6 +866,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DialogClassification"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_dialog_dialogs__dialog_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dialog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialogResponse"];
                 };
             };
             /** @description Validation Error */

@@ -29,7 +29,7 @@ export function mapDialogResponse(data: SchemaDialogResponse): ChatReply {
     dialogId: data.id,
     content: data.reply,
     ...(data.status === 'answered' && citations.length ? { citations } : {}),
-    kind: closed || data.clarification ? 'notice' : 'answer',
+    kind: (closed && data.reason !== 'user_closed') || data.clarification ? 'notice' : 'answer',
     ...(data.clarification ? { clarification: data.clarification } : {}),
     ...(data.tool_calls?.length ? { toolCalls: data.tool_calls } : {}),
     closed,
@@ -78,7 +78,7 @@ export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): C
     ...(item.status === 'escalate' && !item.closed ? { offerSpecialist: true } : existing?.offerSpecialist && status === 'open' ? { offerSpecialist: true } : {}),
   }
   if (existing?.handoff) chat.handoff = existing.handoff
-  else if (item.status === 'escalate' && item.closed) {
+  else if (item.status === 'escalate' && item.closed && line) {
     chat.handoff = {
       requestId: item.id,
       simulated: false,

@@ -13,6 +13,7 @@ from src.config import settings
 from src.logging_ import logger
 from src.modules.audit_email import AuditEmailService
 from src.modules.dialog.factory import build_dialog_service, build_llama_client_from_settings
+from src.modules.dialog.insights import DialogInsightsService
 from src.storages.mongo import document_models
 
 
@@ -48,6 +49,8 @@ async def lifespan(_app: FastAPI):
         use_mongo=True,
         llama_client=llama_client,
     )
+    insights_service = DialogInsightsService(_app.state.dialog_service, settings)
+    insights_task = asyncio.create_task(insights_service.run(), name="dialog-insights")
     email_service = AuditEmailService(settings)
     _app.state.audit_email_service = email_service
     email_task = (
@@ -58,6 +61,9 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
+        insights_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await insights_task
         if email_task is not None:
             email_task.cancel()
             with suppress(asyncio.CancelledError):

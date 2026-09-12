@@ -84,6 +84,7 @@ export interface ChatTransport {
   send: (messages: readonly ChatMessage[], signal: AbortSignal, chatId?: string, onText?: (text: string) => void, onTool?: (tool: ChatToolCall) => void) => Promise<ChatReply>
   requestSpecialist?: (chat: Chat, signal: AbortSignal, contact: SchemaSpecialistContact) => Promise<SpecialistResponse>
   submitFeedback?: (chatId: string, rating: FeedbackRating, comment: string, signal: AbortSignal) => Promise<ChatFeedback>
+  close?: (chatId: string, signal: AbortSignal) => Promise<{ updatedAt: string | null }>
   delete?: (chatId: string, signal: AbortSignal) => Promise<void>
   deleteAll?: (signal: AbortSignal) => Promise<void>
 }
