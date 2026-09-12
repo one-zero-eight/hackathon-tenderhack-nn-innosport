@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { demoTransport } from './demo-transport.ts'
-import type { SchemaDialogListItem, SchemaDialogView, SchemaSpecialistContact, SchemaSupportLine } from '@/api/types'
+import type { SchemaDialogListItem, SchemaDialogView, SchemaSpecialistContact } from '@/api/types'
 import { mergeRemoteDialog, mergeRemoteList } from './dialog-map.ts'
 import {
   applyExchange,
@@ -58,8 +58,7 @@ export interface UseChatResult {
   answerClarification: (request: ClarificationRequest, content: string) => Promise<boolean>
   closeChat: () => void
   reopenChat: () => void
-  previewSpecialist: (signal: AbortSignal) => Promise<{ dialogId: string; line: SchemaSupportLine }>
-  contactSpecialist: (contact: SchemaSpecialistContact, dialogId: string) => Promise<boolean>
+  contactSpecialist: (contact: SchemaSpecialistContact) => Promise<boolean>
   submitFeedback: (rating: FeedbackRating, comment: string) => Promise<boolean>
   dismissFeedback: () => void
   canFeedback: boolean
@@ -456,16 +455,8 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
     }
   }, [allocateChat, commitHistory, transport])
 
-  const previewSpecialist = useCallback(
-    async (signal: AbortSignal) => {
-      if (!transport.previewSpecialist) throw new Error('Specialist routing unavailable')
-      return transport.previewSpecialist(historyRef.current.activeChatId, signal)
-    },
-    [transport],
-  )
-
   const contactSpecialist = useCallback(
-    async (contact: SchemaSpecialistContact, dialogId: string): Promise<boolean> => {
+    async (contact: SchemaSpecialistContact): Promise<boolean> => {
       const current = historyRef.current
       const chat = current.chats.find((item) => item.id === current.activeChatId)
       if (!chat || operations.current.has(chat.id) || !canContactSpecialist(chat)) return false
@@ -478,14 +469,17 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
       setBusyChats((busy) => ({ ...busy, [chat.id]: true }))
       setErrors((errors) => ({ ...errors, [chat.id]: null }))
       try {
-        const response = await transport.requestSpecialist({ ...chat, id: dialogId }, controller.signal, contact)
+        const response = await transport.requestSpecialist(chat, controller.signal, contact)
         if (!mounted.current || controller.signal.aborted) return false
         if (!isSpecialistResponse(response)) throw new Error('Invalid specialist response')
         const latest = historyRef.current
         const target = latest.chats.find((item) => item.id === chat.id)
         if (!target) return false
-        const next = applySpecialistHandoff(target, response, newId(), new Date().toISOString())
-        if (next === target) return false
+        const dialogId = response.requestId
+        const base = { ...target, id: chat.id, status: 'open' as const }
+        delete base.handoff
+        const next = applySpecialistHandoff(base, response, newId(), new Date().toISOString())
+        if (next === base) throw new Error('Invalid specialist response')
         commitHistory({
           ...latest,
           activeChatId: latest.activeChatId === chat.id ? dialogId : latest.activeChatId,
@@ -536,7 +530,6 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
     answerClarification,
     closeChat,
     reopenChat,
-    previewSpecialist,
     contactSpecialist,
     submitFeedback,
     dismissFeedback,

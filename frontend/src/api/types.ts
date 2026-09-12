@@ -132,26 +132,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/dialogs/{dialog_id}/escalation-preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Escalation Preview
-         * @description Preview the specialist line without modifying the appeal.
-         */
-        get: operations["escalation_preview_dialogs__dialog_id__escalation_preview_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/dialogs/{dialog_id}/escalate": {
         parameters: {
             query?: never;
@@ -492,10 +472,6 @@ export interface components {
             /** Messages */
             messages?: components["schemas"]["DialogMessage"][];
         };
-        /** EscalationPreview */
-        EscalationPreview: {
-            line: components["schemas"]["SupportLine"];
-        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -582,7 +558,6 @@ export type SchemaDialogStatus = components['schemas']['DialogStatus'];
 export type SchemaDialogStreamEvent = components['schemas']['DialogStreamEvent'];
 export type SchemaDialogSummary = components['schemas']['DialogSummary'];
 export type SchemaDialogView = components['schemas']['DialogView'];
-export type SchemaEscalationPreview = components['schemas']['EscalationPreview'];
 export type SchemaHttpValidationError = components['schemas']['HTTPValidationError'];
 export type SchemaMessageCreate = components['schemas']['MessageCreate'];
 export type SchemaSpecialistContact = components['schemas']['SpecialistContact'];
@@ -879,37 +854,6 @@ export interface operations {
                 };
                 content: {
                     "application/x-ndjson": components["schemas"]["DialogStreamEvent"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    escalation_preview_dialogs__dialog_id__escalation_preview_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                dialog_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EscalationPreview"];
                 };
             };
             /** @description Validation Error */

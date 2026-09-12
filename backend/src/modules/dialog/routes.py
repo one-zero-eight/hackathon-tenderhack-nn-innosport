@@ -14,7 +14,6 @@ from src.modules.dialog.schemas import (
     DialogStreamEvent,
     DialogSummary,
     DialogView,
-    EscalationPreview,
     MessageCreate,
     SpecialistContact,
 )
@@ -119,15 +118,6 @@ async def stream_message(dialog_id: str, payload: MessageCreate, service: Dialog
         events,
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
-
-
-@router.get("/dialogs/{dialog_id}/escalation-preview")
-async def escalation_preview(dialog_id: str, service: DialogServiceDep) -> EscalationPreview:
-    """Preview the specialist line without modifying the appeal."""
-    try:
-        return await service.escalation_preview(dialog_id)
-    except DialogClosedError as exc:
-        return JSONResponse(status_code=exc.status_code, content=exc.detail)
 
 
 @router.post("/dialogs/{dialog_id}/escalate")

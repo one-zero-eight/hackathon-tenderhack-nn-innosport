@@ -236,6 +236,7 @@ class LlamaCppClient:
         }
         if self.llama_extensions:
             payload["chat_template_kwargs"] = {"enable_thinking": False}
+            payload["cache_prompt"] = True
         started = tm.monotonic()
         try:
             response = await self._client.post(f"{self.base_url}/v1/chat/completions", json=payload)

@@ -82,7 +82,6 @@ export interface ChatReply {
 export interface ChatTransport {
   create?: (signal: AbortSignal) => Promise<{ id: string }>
   send: (messages: readonly ChatMessage[], signal: AbortSignal, chatId?: string, onText?: (text: string) => void, onTool?: (tool: ChatToolCall) => void) => Promise<ChatReply>
-  previewSpecialist?: (chatId: string, signal: AbortSignal) => Promise<{ dialogId: string; line: SchemaSupportLine }>
   requestSpecialist?: (chat: Chat, signal: AbortSignal, contact: SchemaSpecialistContact) => Promise<SpecialistResponse>
   submitFeedback?: (chatId: string, rating: FeedbackRating, comment: string, signal: AbortSignal) => Promise<ChatFeedback>
   delete?: (chatId: string, signal: AbortSignal) => Promise<void>

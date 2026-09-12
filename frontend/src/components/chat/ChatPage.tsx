@@ -162,7 +162,7 @@ export default function ChatPage() {
                       onClose={chat.closeChat}
                       onReopen={chat.reopenChat}
                     />
-                    {chat.canContactSpecialist && <SpecialistContact key={chat.activeChatId} busy={chat.busy} onPreview={chat.previewSpecialist} onContact={chat.contactSpecialist} />}
+                    {chat.canContactSpecialist && <SpecialistContact key={chat.activeChatId} busy={chat.busy} onContact={chat.contactSpecialist} />}
                     {!closed && <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} />}
                   </div>
                 </div>

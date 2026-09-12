@@ -24,7 +24,6 @@ from src.modules.dialog.schemas import (
     DialogStatus,
     DialogStreamEvent,
     DialogView,
-    EscalationPreview,
     SpecialistContact,
     SupportLine,
     ToolCall,
@@ -189,12 +188,6 @@ class DialogService:
                 detail="Line classification is unavailable",
             )
         return line
-
-    async def escalation_preview(self, dialog_id: str) -> EscalationPreview:
-        state = await self._require(dialog_id)
-        if state.closed:
-            raise DialogClosedError(self._response(state, CLOSED_REPLY))
-        return EscalationPreview(line=await self._specialist_line(state))
 
     async def request_specialist(self, dialog_id: str, payload: SpecialistContact) -> DialogResponse:
         state = (await self._require(dialog_id)).model_copy(deep=True)

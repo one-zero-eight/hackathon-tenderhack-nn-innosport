@@ -1,43 +1,20 @@
 import { Description, Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { LuHeadset, LuLoaderCircle, LuX } from 'react-icons/lu'
-import type { SchemaSpecialistContact, SchemaSupportLine } from '@/api/types'
+import type { SchemaSpecialistContact } from '@/api/types'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/input'
 
-type Preview = { dialogId: string; line: SchemaSupportLine }
-
-export default function SpecialistContact({ busy, onPreview, onContact }: {
+export default function SpecialistContact({ busy, onContact }: {
   busy: boolean
-  onPreview: (signal: AbortSignal) => Promise<Preview>
-  onContact: (contact: SchemaSpecialistContact, dialogId: string) => Promise<boolean>
+  onContact: (contact: SchemaSpecialistContact) => Promise<boolean>
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
   const [contact, setContact] = useState({ inn: '', organization_name: '', contact_email: '' })
-  const [preview, setPreview] = useState<Preview | null>(null)
-  const [previewError, setPreviewError] = useState(false)
   const [submitError, setSubmitError] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
-  const [attempt, setAttempt] = useState(0)
-
-  useEffect(() => {
-    if (!open || busy) return
-    const controller = new AbortController()
-    void onPreview(controller.signal).then((value) => {
-      if (!controller.signal.aborted) {
-        setPreview(value)
-        setPreviewError(false)
-      }
-    }).catch(() => {
-      if (!controller.signal.aborted) {
-        setPreview(null)
-        setPreviewError(true)
-      }
-    })
-    return () => controller.abort()
-  }, [open, busy, onPreview, attempt])
 
   const close = () => {
     if (!submittingRef.current) setOpen(false)
@@ -45,7 +22,7 @@ export default function SpecialistContact({ busy, onPreview, onContact }: {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!preview || previewError || busy || submittingRef.current) return
+    if (submittingRef.current) return
     submittingRef.current = true
     setSubmitting(true)
     setSubmitError(false)
@@ -54,7 +31,7 @@ export default function SpecialistContact({ busy, onPreview, onContact }: {
         inn: contact.inn.trim(),
         organization_name: contact.organization_name.trim(),
         contact_email: contact.contact_email.trim(),
-      }, preview.dialogId)
+      })
       if (sent) setOpen(false)
       else setSubmitError(true)
     } catch {
@@ -74,8 +51,6 @@ export default function SpecialistContact({ busy, onPreview, onContact }: {
           className="text-foreground/55 hover:text-foreground flex items-center gap-1.5 text-xs font-normal"
           aria-haspopup="dialog"
           onClick={() => {
-            setPreview(null)
-            setPreviewError(false)
             setSubmitError(false)
             setOpen(true)
           }}
@@ -98,25 +73,11 @@ export default function SpecialistContact({ busy, onPreview, onContact }: {
               <Description className="text-foreground/60 text-ui-body mt-2">
                 Укажите реквизиты организации и email для связи. Оператор получит историю этого обращения.
               </Description>
-              <div role="status" aria-live="polite" className="border-border bg-foreground/3 text-ui-body my-5 rounded-xl border px-3 py-3">
-                {busy && !submitting ? (
-                  <p className="text-foreground/65">Дождёмся ответа бота и уточним линию поддержки. Пока можно заполнить реквизиты.</p>
-                ) : previewError ? (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-error">Не удалось определить линию поддержки.</span>
-                    <Button variant="ghost" size="sm" onClick={() => { setPreviewError(false); setAttempt((value) => value + 1) }}>Повторить</Button>
-                  </div>
-                ) : preview ? (
-                  <>
-                    <p className="text-foreground/55 text-xs">Запрос будет направлен</p>
-                    <p className="mt-1 font-medium">{preview.line.slice(1)}-я линия технической поддержки · {preview.line}</p>
-                  </>
-                ) : (
-                  <p className="text-foreground/65 flex items-center gap-2"><LuLoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />Определяем линию поддержки…</p>
-                )}
-              </div>
+              {busy && !submitting && (
+                <p className="text-foreground/65 text-ui-body mt-3">Дождитесь ответа бота — после этого можно передать обращение.</p>
+              )}
               <form onSubmit={(event) => void submit(event)}>
-                <fieldset disabled={submitting} className="space-y-4">
+                <fieldset disabled={submitting} className="mt-5 space-y-4">
                   <div>
                     <label htmlFor={`${id}-inn`} className="text-ui-body mb-1.5 block font-medium">ИНН организации</label>
                     <Input id={`${id}-inn`} name="inn" inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" minLength={10} maxLength={12} required value={contact.inn} onChange={(event) => setContact({ ...contact, inn: event.target.value })} aria-describedby={`${id}-inn-hint`} />
@@ -134,7 +95,7 @@ export default function SpecialistContact({ busy, onPreview, onContact }: {
                 {submitError && <p role="alert" className="text-error text-ui-body mt-4">Не удалось передать обращение. Реквизиты сохранены в форме — попробуйте ещё раз.</p>}
                 <div className="mt-6 flex flex-wrap justify-end gap-2">
                   <Button variant="ghost" disabled={submitting} onClick={close}>Отмена</Button>
-                  <Button type="submit" disabled={busy || submitting || !preview || previewError} className="flex items-center justify-center gap-2">
+                  <Button type="submit" disabled={busy || submitting} className="flex items-center justify-center gap-2">
                     {submitting && <LuLoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
                     {submitting ? 'Передаём…' : 'Передать оператору'}
                   </Button>

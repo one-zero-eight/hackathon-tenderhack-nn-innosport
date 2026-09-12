@@ -81,10 +81,6 @@ class SpecialistContact(BaseSchema):
     contact_email: EmailStr
 
 
-class EscalationPreview(BaseSchema):
-    line: SupportLine
-
-
 class DialogResponse(BaseSchema):
     id: str
     reply: str

@@ -70,24 +70,16 @@ export function useApiTransport(): ChatTransport {
           invalidateDialogs()
           return reply
         },
-        previewSpecialist: async (chatId, signal) => {
-          const dialogId = await ensureDialogId(createDialog, signal, chatId)
-          const options = $api.queryOptions('get', '/dialogs/{dialog_id}/escalation-preview', {
-            params: { path: { dialog_id: dialogId } },
-            signal,
-          }, { staleTime: 0 })
-          const data = await queryClient.fetchQuery(options)
-          return { dialogId, line: data.line }
-        },
         requestSpecialist: async (chat, signal, contact) => {
+          const dialogId = await ensureDialogId(createDialog, signal, chat.id)
           try {
-            const response = mapSpecialistResponse(await escalate({ params: { path: { dialog_id: chat.id } }, body: contact, signal }))
+            const response = mapSpecialistResponse(await escalate({ params: { path: { dialog_id: dialogId } }, body: contact, signal }))
             invalidateDialogs()
-            return response
+            return { ...response, requestId: dialogId }
           } catch (error) {
             if (isDialogPayload(error)) {
               invalidateDialogs()
-              return mapSpecialistResponse(error)
+              return { ...mapSpecialistResponse(error), requestId: dialogId }
             }
             throw error
           }
