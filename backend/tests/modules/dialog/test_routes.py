@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from src.modules.dialog.catalog import DEFAULT_DATA_DIR, load_knowledge
 from src.modules.dialog.schemas import DialogStatus, SupportLine
 from tests.modules.dialog.conftest import make_client, make_service

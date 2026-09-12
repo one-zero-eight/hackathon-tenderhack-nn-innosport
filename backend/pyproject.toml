@@ -45,9 +45,51 @@ dev = [
 
 [tool.ruff]
 line-length = 120
-lint.extend-select = ["I", "UP", "PL"]
-lint.extend-ignore = ["PLC0415", "PLR"]
-target-version = "py313"
+target-version = "py314"
+# Exploratory notebooks are not part of the API or maintained Python scripts.
+extend-exclude = ["*.ipynb"]
+force-exclude = true
+lint.preview = true
+lint.extend-select = [
+    "E", # pycodestyle error
+    "I", # isort
+    "N", # pep-8 naming
+    "S", # bandit
+    "UP", # pyupgrade
+    "PL", # pylint
+    "A", # flake8-builtins
+    "DTZ", # flake8-datetimez
+    "ICN", # flake8-import-conventions
+    "TID251", # flake8-tidy-imports banned-api
+]
+lint.extend-ignore = [
+    "PLC0415", # import-outside-top-level
+    "PLR", # pylint refactor
+    "E501", # line-too-long (handled by formatter)
+    "PLW1514", # unspecified-encoding in open(...) function
+]
+lint.unfixable = ["F401"] # unused-import — report only, do not remove on fix
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101", # assert is standard in pytest
+    "PLC1901", # exact empty-string assertions distinguish "" from None
+    "PLC2701", # focused tests may import internal helpers
+]
+# Local tooling uses fixed commands, argument lists (no shell), and PATH lookup.
+"ingest/ingest_documents.py" = ["S404", "S603", "S607"]
+"src/prepare.py" = ["S404", "S603", "S607"]
+"src/logging_.py" = ["S101"] # FastAPI internal invariant, not input validation
+"src/storages/mongo/*.py" = ["PLC2701"] # shared internal __base__ module
+"src/storages/mongo/__base__.py" = ["PLW3201"] # Pydantic's documented schema hook
+[tool.ruff.lint.flake8-builtins]
+ignorelist = ["id"]
+[tool.ruff.lint.flake8-import-conventions]
+banned-from = ["datetime", "time"]
+[tool.ruff.lint.flake8-import-conventions.aliases]
+datetime = "dtm"
+time = "tm"
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"__future__.annotations".msg = "Python 3.14+ uses deferred annotations by default; do not use this future import."
 
 [tool.uv.workspace]
 members = ["ingest"]

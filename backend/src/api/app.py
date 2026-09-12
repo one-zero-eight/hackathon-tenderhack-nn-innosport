@@ -16,6 +16,7 @@ from src.api import docs
 from src.api.lifespan import lifespan
 from src.config import settings
 from src.logging_ import logger
+from src.modules.dialog.routes import router as router_dialog
 
 # App definition
 app = FastAPI(
@@ -73,8 +74,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from src.modules.dialog.routes import router as router_dialog
 
 # Import routers above and include them below [do not edit this comment]
 app.include_router(router_dialog)

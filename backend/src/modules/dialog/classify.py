@@ -1,18 +1,15 @@
-from __future__ import annotations
-
 import re
-from dataclasses import dataclass
 
 from src.modules.dialog.models import KnowledgeBase, Topic
 from src.modules.dialog.normalize import significant_roots, significant_stems, stem_ru, tokenize
+from src.pydantic_base import BaseSchema
 
 CLEAR_SCORE = 7.5
 MARGIN = 1.8
 MIN_OPTION_SCORE = 1.0
 
 
-@dataclass(frozen=True)
-class TopicScore:
+class TopicScore(BaseSchema):
     topic: Topic
     score: float
 

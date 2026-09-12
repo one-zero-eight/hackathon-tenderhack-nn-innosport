@@ -21,7 +21,7 @@ services:
           memory: 1g
         reservations:
           memory: 500m
-  
+
   db:
     # See more: https://hub.docker.com/_/mongo
     image: "mongo:8.0"
@@ -38,6 +38,6 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-mongoadmin}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-secret}
-  
+
 volumes:
   mongodb:

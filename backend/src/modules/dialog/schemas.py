@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from datetime import datetime
+import datetime as dtm
 from enum import StrEnum
 from typing import Annotated
 
@@ -19,6 +17,7 @@ class DialogStatus(StrEnum):
 class SupportLine(StrEnum):
     L1 = "L1"
     L2 = "L2"
+    L3 = "L3"
 
 
 class TopicRef(BaseSchema):
@@ -49,7 +48,7 @@ class DialogResponse(BaseSchema):
     citations: list[Citation] = Field(default_factory=list)
     closed: bool = False
     reason: str | None = None
-    updated_at: datetime | None = None
+    updated_at: dtm.datetime | None = None
 
 
 class DialogListItem(BaseSchema):
@@ -61,7 +60,7 @@ class DialogListItem(BaseSchema):
     line: SupportLine | None = None
     closed: bool = False
     reason: str | None = None
-    updated_at: datetime
+    updated_at: dtm.datetime
 
 
 class DialogMessage(BaseSchema):

@@ -57,7 +57,7 @@ class Settings(SettingBaseModel):
     "Local llama.cpp classifier. Disabled by default; the API never calls OpenAI/Gemini/Claude."
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "Settings":
+    def from_yaml(cls, path: Path) -> Settings:
         with open(path) as f:
             yaml_config = yaml.safe_load(f)
 

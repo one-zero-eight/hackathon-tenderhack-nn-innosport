@@ -2,8 +2,8 @@ $schema: https://json-schema.org/draft-07/schema
 $defs:
   Environment:
     enum:
-      - development
-      - production
+    - development
+    - production
     title: Environment
     type: string
   LlamaCppSettings:
@@ -62,8 +62,8 @@ description: Settings for the application.
 properties:
   $schema:
     anyOf:
-      - type: string
-      - type: 'null'
+    - type: string
+    - type: 'null'
     default: null
     title: $Schema
   environment:
@@ -78,8 +78,8 @@ properties:
   database_uri:
     description: MongoDB database settings
     examples:
-      - mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin
-      - mongodb://mongoadmin:secret@db:27017/db?authSource=admin
+    - mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin
+    - mongodb://mongoadmin:secret@db:27017/db?authSource=admin
     format: password
     title: Database Uri
     type: string
@@ -106,6 +106,6 @@ properties:
     description: Local llama.cpp classifier. Disabled by default; the API never calls
       OpenAI/Gemini/Claude.
 required:
-  - database_uri
+- database_uri
 title: Settings
 type: object

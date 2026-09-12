@@ -10,17 +10,15 @@
 
 """Build topic catalog and short extractive chunks from /docs."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import re
 import sys
 from collections import Counter, defaultdict
-from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
+from pydantic import BaseModel
 from pypdf import PdfReader
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -189,15 +187,13 @@ ABBREV_KEYS = (
 )
 
 
-@dataclass
-class RawTopic:
+class RawTopic(BaseModel):
     number: int
     parent: str
     title: str
 
 
-@dataclass
-class PdfSection:
+class PdfSection(BaseModel):
     document: str
     path: str
     number: str
@@ -415,7 +411,7 @@ def derived_keys(topic: RawTopic, section: PdfSection | None, extra: list[str]) 
         seen.add(lowered)
         keys.append(item)
 
-    GENERIC_EXTRA = {
+    generic_extra = {
         "портал",
         "поставщик",
         "поставщика",
@@ -448,7 +444,7 @@ def derived_keys(topic: RawTopic, section: PdfSection | None, extra: list[str]) 
     for phrase in SUBTOPIC_QUERIES.get(topic.title, ()):
         add(phrase)
     for token in extra:
-        if token.lower() in GENERIC_EXTRA:
+        if token.lower() in generic_extra:
             continue
         add(token)
     title_lower = topic.title.lower()

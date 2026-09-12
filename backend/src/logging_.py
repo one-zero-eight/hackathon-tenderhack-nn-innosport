@@ -55,7 +55,7 @@ class CleanErrorFilter(logging.Filter):
         return True
 
 
-dictConfig = {
+LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
@@ -83,7 +83,7 @@ dictConfig = {
     },
 }
 
-logging.config.dictConfig(dictConfig)
+logging.config.dictConfig(LOGGING_CONFIG)
 
 logger = logging.getLogger("src")
 logger.addFilter(RelativePathFilter())

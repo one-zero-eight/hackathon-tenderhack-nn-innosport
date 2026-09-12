@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from src.modules.dialog.llama import NullLlamaClient
 from src.modules.dialog.schemas import DialogStatus, SupportLine
 from tests.modules.dialog.conftest import make_service

@@ -3,7 +3,6 @@ import subprocess
 from pathlib import Path
 
 from memvid_sdk import create
-
 from shared import embedder
 
 DOCS_DIR = Path(__file__).parent / "documents"
@@ -121,9 +120,7 @@ def pack_units(units: list[str], max_chars: int = CHUNK_SIZE) -> list[str]:
 
 
 def split_sections(text: str, source: str) -> list[dict]:
-    headings = [
-        m for m in HEADING_RE.finditer(text) if not TOC_LINE_RE.search(m.group(0))
-    ]
+    headings = [m for m in HEADING_RE.finditer(text) if not TOC_LINE_RE.search(m.group(0))]
     if not headings:
         return [
             {
@@ -176,10 +173,7 @@ def main():
         print("No content extracted from documents/, nothing to ingest.")
         return
 
-    embeddings = [
-        [float(x) for x in vec]
-        for vec in embedder.embed_documents([item["text"] for item in items])
-    ]
+    embeddings = [[float(x) for x in vec] for vec in embedder.embed_documents([item["text"] for item in items])]
 
     Path(STORE_PATH).unlink(missing_ok=True)
     mem = create(STORE_PATH, enable_lex=True, enable_vec=True)

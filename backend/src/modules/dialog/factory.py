@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 
 from src.modules.dialog.catalog import DEFAULT_DATA_DIR, load_knowledge

@@ -1,32 +1,29 @@
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+import datetime as dtm
 from typing import Protocol
 from uuid import uuid4
 
+from pydantic import Field
+
 from src.modules.dialog.schemas import DialogStatus, SupportLine
+from src.pydantic_base import BaseSchema
 
 
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+def utcnow() -> dtm.datetime:
+    return dtm.datetime.now(dtm.UTC)
 
 
-@dataclass
-class StoredMessage:
+class StoredMessage(BaseSchema):
     role: str
     content: str
 
 
-@dataclass
-class StoredCitation:
+class StoredCitation(BaseSchema):
     document: str
     section: str
     path: str
 
 
-@dataclass
-class ConversationState:
+class ConversationState(BaseSchema):
     id: str
     revision: int = 0
     closed: bool = False
@@ -35,10 +32,10 @@ class ConversationState:
     line: SupportLine | None = None
     reason: str | None = None
     failed_clarifications: int = 0
-    pending_option_ids: list[str] = field(default_factory=list)
-    citations: list[StoredCitation] = field(default_factory=list)
-    messages: list[StoredMessage] = field(default_factory=list)
-    updated_at: datetime = field(default_factory=utcnow)
+    pending_option_ids: list[str] = Field(default_factory=list)
+    citations: list[StoredCitation] = Field(default_factory=list)
+    messages: list[StoredMessage] = Field(default_factory=list)
+    updated_at: dtm.datetime = Field(default_factory=utcnow)
 
 
 class ConversationConflictError(RuntimeError):

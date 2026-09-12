@@ -1,7 +1,5 @@
-from __future__ import annotations
-
+import datetime as dtm
 import re
-from datetime import datetime, timezone
 
 from beanie import PydanticObjectId
 from pydantic import Field
@@ -40,7 +38,7 @@ class ConversationSchema(BaseSchema):
     pending_option_ids: list[str] = Field(default_factory=list)
     citations: list[ConversationCitationSchema] = Field(default_factory=list)
     messages: list[ConversationMessageSchema] = Field(default_factory=list)
-    updated_at: datetime | None = None
+    updated_at: dtm.datetime | None = None
 
 
 class Conversation(ConversationSchema, CustomDocument):
@@ -51,16 +49,16 @@ class Conversation(ConversationSchema, CustomDocument):
         indexes = ["updated_at"]
 
 
-def _document_updated_at(document: Conversation) -> datetime:
+def _document_updated_at(document: Conversation) -> dtm.datetime:
     if document.updated_at is not None:
         value = document.updated_at
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
+            return value.replace(tzinfo=dtm.UTC)
         return value
     if document.id is not None:
         generated = document.id.generation_time
         if generated.tzinfo is None:
-            return generated.replace(tzinfo=timezone.utc)
+            return generated.replace(tzinfo=dtm.UTC)
         return generated
     return utcnow()
 

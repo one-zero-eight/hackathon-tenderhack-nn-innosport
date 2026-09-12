@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 import json
 import re
-from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
@@ -10,6 +7,7 @@ import httpx
 from src.logging_ import logger
 from src.modules.dialog.models import Chunk, Topic
 from src.modules.dialog.normalize import normalize_text
+from src.pydantic_base import BaseSchema
 
 NUMBER_RE = re.compile(r"\d{2,}")
 URL_RE = re.compile(r"(?:https?://|www\.)[^\s)\]}]+", re.IGNORECASE)
@@ -25,8 +23,7 @@ class TopicAdvisor(Protocol):
     ) -> str | None: ...
 
 
-@dataclass(frozen=True)
-class GroundedAnswer:
+class GroundedAnswer(BaseSchema):
     text: str
     citation_ids: list[str]
 
@@ -98,7 +95,7 @@ class LlamaCppClient:
         catalog_lines = "\n".join(f"{topic.id}: {topic.title}" for topic in topics[:8])
         history_text = _compact_history(history, limit=4)
         prompt = (
-            "Выбери одну тему. JSON: {\"topic_id\":\"t-001\"} или {\"topic_id\":null}. "
+            'Выбери одну тему. JSON: {"topic_id":"t-001"} или {"topic_id":null}. '
             "Не выдумывай id.\n"
             f"{catalog_lines}\n"
             f"{history_text}\n"
@@ -128,7 +125,7 @@ class LlamaCppClient:
         sources = "\n".join(f"[{chunk.id}] {chunk.text[:700]}" for chunk in chunks[:2])
         prompt = (
             "Ответь только по источникам, дословными предложениями. "
-            "JSON: {\"can_answer\":true,\"answer\":\"...\",\"citation_ids\":[\"id\"]}.\n"
+            'JSON: {"can_answer":true,"answer":"...","citation_ids":["id"]}.\n'
             f"Тема: {topic.title}\n{history_text}\n"
             f"Вопрос: {question}\n"
             f"{sources}"
@@ -166,12 +163,12 @@ class LlamaCppClient:
             response = await self._client.post(url, json=payload)
             response.raise_for_status()
             data = response.json()
-        except (httpx.HTTPError, OSError, TimeoutError, json.JSONDecodeError):
+        except httpx.HTTPError, OSError, TimeoutError, json.JSONDecodeError:
             logger.warning("llama.cpp request failed; using deterministic fallback", exc_info=True)
             return None
         try:
             content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError):
+        except KeyError, IndexError, TypeError:
             return None
         return content if isinstance(content, str) else None
 

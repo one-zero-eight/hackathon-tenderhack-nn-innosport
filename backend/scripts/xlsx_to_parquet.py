@@ -32,7 +32,7 @@ def convert_topics(source: Path, destination: Path) -> pl.DataFrame:
         sheet_id=1,
         read_options={"header_row": 2},
         columns=columns,
-        schema_overrides={column: pl.String for column in columns},
+        schema_overrides=dict.fromkeys(columns, pl.String),
     )
     result = data.select(
         pl.col("Тема обращений").str.strip_chars().replace("", None).forward_fill().alias("topic"),
@@ -51,7 +51,7 @@ def convert(source: Path, destination: Path) -> pl.DataFrame:
         engine="calamine",
         sheet_id=1,
         columns=SOURCE_COLUMNS,
-        schema_overrides={column: pl.String for column in SOURCE_COLUMNS},
+        schema_overrides=dict.fromkeys(SOURCE_COLUMNS, pl.String),
     )
     description = pl.col("Описание")
     result = data.select(

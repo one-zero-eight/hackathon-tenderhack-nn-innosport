@@ -80,7 +80,7 @@ def check_database_access():
     from motor.motor_asyncio import AsyncIOMotorClient
     from pymongo import timeout
 
-    DEFAULT_DB_URL = "mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin"
+    default_db_url = "mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin"
     settings = get_settings()
     database_uri = settings.get("database_uri")
 
@@ -90,12 +90,12 @@ def check_database_access():
         try:
             with open(SETTINGS_FILE) as f:
                 as_text = f.read()
-            as_text = as_text.replace("database_uri: null", f"database_uri: {DEFAULT_DB_URL}")
-            as_text = as_text.replace("database_uri: ...", f"database_uri: {DEFAULT_DB_URL}")
+            as_text = as_text.replace("database_uri: null", f"database_uri: {default_db_url}")
+            as_text = as_text.replace("database_uri: ...", f"database_uri: {default_db_url}")
             with open(SETTINGS_FILE, "w") as f:
                 f.write(as_text)
             print("  ✅ `database_uri` has been updated in `settings.yaml`.")
-            database_uri = DEFAULT_DB_URL
+            database_uri = default_db_url
         except Exception as e:
             print(f"  ❌ Error updating `settings.yaml`: {e}")
             return

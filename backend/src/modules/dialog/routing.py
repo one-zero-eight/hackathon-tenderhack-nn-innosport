@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 
 from src.modules.dialog.normalize import normalize_text
