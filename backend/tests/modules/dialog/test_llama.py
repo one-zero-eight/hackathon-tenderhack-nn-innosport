@@ -23,22 +23,16 @@ def test_parse_topic_id_rejects_unknown() -> None:
     assert _parse_topic_id("not json", allowed) is None
 
 
-async def test_llama_timeout_returns_none(monkeypatch) -> None:
+async def test_llama_timeout_returns_none() -> None:
     client = LlamaCppClient(base_url="http://127.0.0.1:9", timeout_seconds=0.01)
 
-    class BoomClient:
-        async def __aenter__(self):
-            return self
+    async def boom(*_args, **_kwargs):
+        raise TimeoutError("down")
 
-        async def __aexit__(self, *args):
-            return None
-
-        async def post(self, *args, **kwargs):
-            raise TimeoutError("down")
-
-    monkeypatch.setattr("src.modules.dialog.llama.httpx.AsyncClient", lambda **kwargs: BoomClient())
+    client._client.post = boom  # type: ignore[method-assign]
     result = await client.suggest_topic_id("регистрация", [_topic("t-001")])
     assert result is None
+    await client.aclose()
 
 
 def test_grounded_answer_requires_valid_citation_and_evidence() -> None:

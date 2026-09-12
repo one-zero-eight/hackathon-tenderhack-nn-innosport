@@ -42,7 +42,7 @@ class AnswerGenerator(Protocol):
 
 
 class DialogLlamaClient(TopicAdvisor, AnswerGenerator, Protocol):
-    pass
+    async def aclose(self) -> None: ...
 
 
 class NullLlamaClient:
@@ -63,6 +63,9 @@ class NullLlamaClient:
     ) -> GroundedAnswer | None:
         return None
 
+    async def aclose(self) -> None:
+        return None
+
 
 class LlamaCppClient:
     """Local llama.cpp client with validated topic and grounded-answer output."""
@@ -73,8 +76,8 @@ class LlamaCppClient:
         base_url: str,
         model: str = "",
         timeout_seconds: float = 8.0,
-        max_tokens: int = 96,
-        answer_max_tokens: int = 600,
+        max_tokens: int = 24,
+        answer_max_tokens: int = 192,
         temperature: float = 0.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
@@ -83,6 +86,7 @@ class LlamaCppClient:
         self.max_tokens = max_tokens
         self.answer_max_tokens = answer_max_tokens
         self.temperature = temperature
+        self._client = httpx.AsyncClient(timeout=self.timeout_seconds)
 
     async def suggest_topic_id(
         self,
@@ -91,22 +95,21 @@ class LlamaCppClient:
         history: list[tuple[str, str]] | None = None,
     ) -> str | None:
         allowed = {topic.id: topic for topic in topics}
-        catalog_lines = "\n".join(f"{topic.id}: {topic.parent_title} / {topic.title}" for topic in topics)
-        history_text = "\n".join(f"{role}: {content}" for role, content in (history or [])[-8:])
+        catalog_lines = "\n".join(f"{topic.id}: {topic.title}" for topic in topics[:8])
+        history_text = _compact_history(history, limit=4)
         prompt = (
-            "Выбери одну тему обращения из списка. Верни только JSON вида "
-            '{"topic_id": "t-001"} или {"topic_id": null}. '
-            "Нельзя придумывать id.\n\n"
-            f"Каталог:\n{catalog_lines}\n\n"
-            f"История диалога:\n{history_text or '(пусто)'}\n\n"
-            f"Текущее сообщение:\n{text}"
+            "Выбери одну тему. JSON: {\"topic_id\":\"t-001\"} или {\"topic_id\":null}. "
+            "Не выдумывай id.\n"
+            f"{catalog_lines}\n"
+            f"{history_text}\n"
+            f"Сейчас: {text}"
         )
         content = await self._complete(
             [
-                {"role": "system", "content": "Ты классификатор тем службы поддержки. Отвечаешь только JSON."},
+                {"role": "system", "content": "Классификатор тем. Только JSON."},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=self.max_tokens,
+            max_tokens=min(self.max_tokens, 24),
         )
         if content is None:
             return None
@@ -121,33 +124,24 @@ class LlamaCppClient:
     ) -> GroundedAnswer | None:
         if not chunks:
             return None
-        history_text = "\n".join(f"{role}: {content}" for role, content in history[-8:])
-        sources = "\n\n".join(f"[{chunk.id}] {chunk.document}, {chunk.section}\n{chunk.text}" for chunk in chunks)
+        history_text = _compact_history(history, limit=4)
+        sources = "\n".join(f"[{chunk.id}] {chunk.text[:700]}" for chunk in chunks[:2])
         prompt = (
-            "Ответь на вопрос пользователя ТОЛЬКО по источникам ниже. "
-            "Нельзя добавлять факты, шаги, ссылки, номера или предположения, которых нет в источниках. "
-            "Поле answer составь только из дословных полных предложений источников; не перефразируй. "
-            "Если источники не отвечают на вопрос, верни can_answer=false. "
-            "Верни только JSON: "
-            '{"can_answer": true, "answer": "краткий ответ", "citation_ids": ["id"]} '
-            'или {"can_answer": false, "answer": "", "citation_ids": []}.\n\n'
-            f"Тема: {topic.parent_title} / {topic.title}\n"
-            f"История:\n{history_text}\n\n"
-            f"Вопрос: {question}\n\n"
-            f"Источники:\n{sources}"
+            "Ответь только по источникам, дословными предложениями. "
+            "JSON: {\"can_answer\":true,\"answer\":\"...\",\"citation_ids\":[\"id\"]}.\n"
+            f"Тема: {topic.title}\n{history_text}\n"
+            f"Вопрос: {question}\n"
+            f"{sources}"
         )
         content = await self._complete(
             [
                 {
                     "role": "system",
-                    "content": (
-                        "Ты оператор базы знаний Портала поставщиков. "
-                        "Точность важнее полноты. Отвечай только JSON и только по данным источников."
-                    ),
+                    "content": "Оператор базы знаний. Только JSON по источникам, без выдумок.",
                 },
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=self.answer_max_tokens,
+            max_tokens=min(self.answer_max_tokens, 192),
         )
         if content is None:
             return None
@@ -163,15 +157,15 @@ class LlamaCppClient:
             "messages": messages,
             "temperature": self.temperature,
             "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
         }
         if self.model:
             payload["model"] = self.model
         url = f"{self.base_url}/v1/chat/completions"
         try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.post(url, json=payload)
-                response.raise_for_status()
-                data = response.json()
+            response = await self._client.post(url, json=payload)
+            response.raise_for_status()
+            data = response.json()
         except (httpx.HTTPError, OSError, TimeoutError, json.JSONDecodeError):
             logger.warning("llama.cpp request failed; using deterministic fallback", exc_info=True)
             return None
@@ -180,6 +174,21 @@ class LlamaCppClient:
         except (KeyError, IndexError, TypeError):
             return None
         return content if isinstance(content, str) else None
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+
+def _compact_history(history: list[tuple[str, str]] | None, *, limit: int) -> str:
+    if not history:
+        return ""
+    lines: list[str] = []
+    for role, content in history[-limit:]:
+        compact = " ".join(content.split())
+        if len(compact) > 280:
+            compact = compact[:277] + "..."
+        lines.append(f"{role}: {compact}")
+    return "\n".join(lines)
 
 
 def _parse_topic_id(content: str, allowed: dict[str, Topic]) -> str | None:

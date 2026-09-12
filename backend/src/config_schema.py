@@ -25,9 +25,9 @@ class LlamaCppSettings(SettingBaseModel):
     "Model name forwarded to /v1/chat/completions. Empty string lets llama.cpp use its loaded model."
     timeout_seconds: float = Field(default=8.0, gt=0, le=120)
     "HTTP timeout; on timeout the API falls back to keyword scoring"
-    max_tokens: int = Field(default=96, gt=0, le=8192)
+    max_tokens: int = Field(default=24, gt=0, le=8192)
     "Maximum output tokens for topic classification"
-    answer_max_tokens: int = Field(default=600, gt=0, le=8192)
+    answer_max_tokens: int = Field(default=192, gt=0, le=8192)
     "Maximum output tokens for a grounded answer"
     temperature: float = Field(default=0.0, ge=0, le=2)
 

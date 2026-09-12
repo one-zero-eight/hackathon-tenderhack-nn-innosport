@@ -9,6 +9,6 @@ llama_cpp:
   base_url: http://127.0.0.1:8080
   model: ''
   timeout_seconds: 8
-  max_tokens: 96
-  answer_max_tokens: 600
+  max_tokens: 24
+  answer_max_tokens: 192
   temperature: 0

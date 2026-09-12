@@ -42,11 +42,13 @@ async def setup_database() -> AsyncIOMotorClient:
 async def lifespan(_app: FastAPI):
     # Application startup
     motor_client = await setup_database()
+    llama_client = build_llama_client_from_settings()
     _app.state.dialog_service = build_dialog_service(
         use_mongo=True,
-        llama_client=build_llama_client_from_settings(),
+        llama_client=llama_client,
     )
     yield
 
     # -- Application shutdown --
+    await llama_client.aclose()
     motor_client.close()

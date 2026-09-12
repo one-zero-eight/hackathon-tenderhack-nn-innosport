@@ -221,13 +221,14 @@ class DialogService:
         locked = lock_topic(ranked, dialog_query)
         if locked is not None:
             return locked
-        candidate_topics = [item.topic for item in ranked[:12] if item.score > 0] or self.knowledge.topics
-        history = [(item.role, item.content) for item in state.messages]
-        suggested_id = await self.llama_client.suggest_topic_id(text, candidate_topics, history)
-        if suggested_id:
-            suggested = self.knowledge.topic_by_id(suggested_id)
-            if suggested is not None:
-                return suggested
+        candidate_topics = [item.topic for item in ranked[:6] if item.score > 0]
+        if candidate_topics:
+            history = [(item.role, item.content) for item in state.messages]
+            suggested_id = await self.llama_client.suggest_topic_id(text, candidate_topics, history)
+            if suggested_id:
+                suggested = self.knowledge.topic_by_id(suggested_id)
+                if suggested is not None:
+                    return suggested
         options = clarification_options(ranked, self.knowledge)
         state.pending_option_ids = [item.id for item in options]
         return None

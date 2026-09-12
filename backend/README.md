@@ -116,15 +116,25 @@ llama_cpp:
   base_url: http://127.0.0.1:8080   # or http://192.168.x.x:8080
   model: ""                         # leave empty to use the model loaded by llama-server
   timeout_seconds: 8
-  max_tokens: 96
-  answer_max_tokens: 600
+  max_tokens: 24
+  answer_max_tokens: 192
 ```
 
 Example server on this machine (the API does not download a model):
 
 ```bash
-llama-server --host 0.0.0.0 --port 8080 --model /path/to/local.gguf
+llama-server --host 127.0.0.1 --port 8080 \
+  --model /path/to/local.gguf \
+  --ctx-size 2048 --parallel 1 --threads 10 --threads-batch 10 \
+  --gpu-layers 99 --flash-attn on --temp 0
 ```
+
+`--gpu-layers 99` offloads to Metal on Apple Silicon. Do not use the Intel
+Homebrew `llama-server` from `/usr/local` on an M-series Mac: it runs under
+Rosetta without GPU and prompt eval drops to tens of tokens/s. Use a native
+`macos-arm64` build from [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases)
+(this repo keeps one in `backend/.tools/`, gitignored). `--parallel 1` keeps
+the full context on one request instead of splitting it across idle slots.
 
 The model must return JSON with `can_answer`, `answer`, and Memvid frame IDs.
 The backend rejects unknown citations and answers with insufficient lexical
