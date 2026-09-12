@@ -8,9 +8,9 @@ from uuid import uuid4
 from fastapi import HTTPException, status
 
 from src.logging_ import logger
-from src.modules.dialog.abuse import is_abuse
+from src.modules.dialog.abuse import has_profanity_or_insult, has_working_request, scan_abuse, usable_rephrase
 from src.modules.dialog.classify import is_capability_question, is_greeting, is_thanks
-from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient, TextCallback, ToolCallback
+from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient, TextCallback, ToolCallback, as_user_message
 from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_answer
 from src.modules.dialog.schemas import (
     Citation,
@@ -25,6 +25,7 @@ from src.modules.dialog.schemas import (
     DialogStreamEvent,
     DialogView,
     SpecialistContact,
+    SuggestedRephrase,
     SupportLine,
     ToolCall,
     ToolStatus,
@@ -44,6 +45,7 @@ from src.modules.dialog.texts import (
     GREETING_REPLY,
     L1_REPLY,
     L2_REPLY,
+    MIXED_ABUSE_REPLY,
     MODEL_UNAVAILABLE_REPLY,
     NO_KNOWLEDGE_REPLY,
 )
@@ -103,27 +105,53 @@ class DialogService:
     async def delete_all(self) -> DialogDeleteResult:
         return DialogDeleteResult(deleted=await self.store.delete_all())
 
-    async def _prepare_message(self, dialog_id: str, clarification_id: str | None) -> ConversationState:
+    async def _prepare_message(
+        self,
+        dialog_id: str,
+        clarification_id: str | None,
+        suggestion_id: str | None = None,
+    ) -> ConversationState:
         state = await self._require(dialog_id)
         if state.closed:
             raise DialogClosedError(self._response(state, CLOSED_REPLY))
+        if clarification_id is not None and suggestion_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Pass only one of clarification_id or suggestion_id",
+            )
         if clarification_id is not None and (state.clarification is None or state.clarification.id != clarification_id):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Clarification is no longer pending")
+        if suggestion_id is not None and (
+            state.suggested_rephrase is None or state.suggested_rephrase.id != suggestion_id
+        ):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Suggestion is no longer pending")
         # Keep provisional changes isolated even with an in-memory store.
         return state.model_copy(deep=True)
 
-    async def add_message(self, dialog_id: str, content: str, clarification_id: str | None = None) -> DialogResponse:
-        state = await self._prepare_message(dialog_id, clarification_id)
-        return await self._add_message(state, content)
+    async def add_message(
+        self,
+        dialog_id: str,
+        content: str,
+        clarification_id: str | None = None,
+        suggestion_id: str | None = None,
+    ) -> DialogResponse:
+        state = await self._prepare_message(dialog_id, clarification_id, suggestion_id)
+        return await self._add_message(state, content, suggestion_id=suggestion_id)
 
     async def stream_message(
-        self, dialog_id: str, content: str, clarification_id: str | None = None
+        self,
+        dialog_id: str,
+        content: str,
+        clarification_id: str | None = None,
+        suggestion_id: str | None = None,
     ) -> AsyncIterator[str]:
         # Validate before the response headers are sent (404/409 remain HTTP errors).
-        state = await self._prepare_message(dialog_id, clarification_id)
-        return self._message_events(state, content)
+        state = await self._prepare_message(dialog_id, clarification_id, suggestion_id)
+        return self._message_events(state, content, suggestion_id=suggestion_id)
 
-    async def _message_events(self, state: ConversationState, content: str) -> AsyncIterator[str]:
+    async def _message_events(
+        self, state: ConversationState, content: str, *, suggestion_id: str | None = None
+    ) -> AsyncIterator[str]:
         queue: asyncio.Queue[DialogStreamEvent] = asyncio.Queue(maxsize=1)
 
         async def on_text(text: str) -> None:
@@ -134,7 +162,9 @@ class DialogService:
 
         async def generate() -> None:
             try:
-                response = await self._add_message(state, content, on_text=on_text, on_tool=on_tool)
+                response = await self._add_message(
+                    state, content, suggestion_id=suggestion_id, on_text=on_text, on_tool=on_tool
+                )
                 await queue.put(DialogStreamEvent(type="done", response=response))
             except HTTPException as exc:
                 await queue.put(DialogStreamEvent(type="error", detail=str(exc.detail)))
@@ -165,19 +195,30 @@ class DialogService:
         state: ConversationState,
         content: str,
         *,
+        suggestion_id: str | None = None,
         on_text: TextCallback | None = None,
         on_tool: ToolCallback | None = None,
     ) -> DialogResponse:
-        text = content.strip()
         pending = state.clarification
+        suggestion = state.suggested_rephrase
         state.clarification = None
+        state.suggested_rephrase = None
+        text = suggestion.content if suggestion_id is not None and suggestion is not None else content.strip()
         state.messages.append(StoredMessage(role="user", content=text))
-        response = await self._step(state, text, pending=pending, on_text=on_text, on_tool=on_tool)
+        response = await self._step(
+            state,
+            text,
+            pending=pending,
+            accepted_suggestion=suggestion_id is not None,
+            on_text=on_text,
+            on_tool=on_tool,
+        )
         state.messages.append(
             StoredMessage(
                 role="assistant",
                 content=response.reply,
                 clarification=response.clarification,
+                suggested_rephrase=response.suggested_rephrase,
                 tool_calls=response.tool_calls,
             )
         )
@@ -240,16 +281,18 @@ class DialogService:
         text: str,
         *,
         pending: Clarification | None = None,
+        accepted_suggestion: bool = False,
         on_text: TextCallback | None = None,
         on_tool: ToolCallback | None = None,
     ) -> DialogResponse:
-        if is_abuse(text):
+        scan = scan_abuse(text)
+        if isinstance(self.llama_client, NullLlamaClient) and scan.has_matches:
             return self._finish(
                 state,
-                reply=ABUSE_REPLY,
-                status=DialogStatus.CLOSED_ABUSE,
-                closed=True,
-                reason="abuse",
+                reply=MODEL_UNAVAILABLE_REPLY,
+                status=DialogStatus.CLARIFYING,
+                closed=False,
+                reason="model_unavailable",
                 line=None,
             )
 
@@ -299,8 +342,64 @@ class DialogService:
                 )
             )
             history[-1] = ("user", agent_question)
-        result = await self.llama_client.run(agent_question, history, self.retriever, on_text=on_text, on_tool=on_tool)
+        result = await self.llama_client.run(
+            agent_question,
+            history,
+            self.retriever,
+            lexicon_matches=scan.matched_terms,
+            on_text=on_text,
+            on_tool=on_tool,
+        )
         tool_calls = result.tool_calls if result is not None else []
+        moderation = result.moderation if result is not None else None
+        if accepted_suggestion or not has_profanity_or_insult(text):
+            moderation = None
+        if moderation is not None and moderation.verdict == "mixed":
+            leftover = as_user_message(moderation.cleaned_request)
+            if leftover and has_profanity_or_insult(leftover):
+                leftover = ""
+            leftover = leftover or usable_rephrase(text)
+            if leftover and not has_profanity_or_insult(leftover):
+                moderation = moderation.model_copy(update={"cleaned_request": leftover})
+            elif has_profanity_or_insult(text) or scan.has_matches:
+                moderation = moderation.model_copy(update={"verdict": "pure_abuse", "cleaned_request": ""})
+        if moderation is not None and moderation.verdict == "pure_abuse" and has_working_request(text):
+            leftover = usable_rephrase(text)
+            if leftover and not has_profanity_or_insult(leftover):
+                moderation = moderation.model_copy(update={"verdict": "mixed", "cleaned_request": leftover})
+        if moderation is not None and moderation.verdict == "pure_abuse":
+            return self._finish(
+                state,
+                reply=ABUSE_REPLY,
+                status=DialogStatus.CLOSED_ABUSE,
+                closed=True,
+                reason="abuse",
+                line=None,
+                tool_calls=tool_calls,
+            )
+        if moderation is not None and moderation.verdict == "mixed":
+            cleaned = as_user_message(moderation.cleaned_request) or usable_rephrase(text)
+            if not cleaned or has_profanity_or_insult(cleaned):
+                return self._finish(
+                    state,
+                    reply=ABUSE_REPLY,
+                    status=DialogStatus.CLOSED_ABUSE,
+                    closed=True,
+                    reason="abuse",
+                    line=None,
+                    tool_calls=tool_calls,
+                )
+            suggestion = SuggestedRephrase(id=uuid4().hex, content=cleaned)
+            return self._finish(
+                state,
+                reply=MIXED_ABUSE_REPLY,
+                status=DialogStatus.CLARIFYING,
+                closed=False,
+                reason="mixed_abuse",
+                line=None,
+                suggested_rephrase=suggestion,
+                tool_calls=tool_calls,
+            )
         if result is not None and result.reply is not None:
             generated = result.reply
             if result.clarification is not None:
@@ -327,7 +426,7 @@ class DialogService:
                 )
             selected = result.sources
             reply = generated.text
-        elif isinstance(self.llama_client, NullLlamaClient):
+        elif isinstance(self.llama_client, NullLlamaClient) and not scan.has_matches:
             dialog_query = self._dialog_query(state)
             chunks = await self.retriever.find(dialog_query, limit=6)
             reply, selected = extractive_answer(dialog_query, chunks)
@@ -404,9 +503,11 @@ class DialogService:
         reason: str | None,
         line: SupportLine | None,
         clarification: Clarification | None = None,
+        suggested_rephrase: SuggestedRephrase | None = None,
         tool_calls: list[ToolCall] | None = None,
     ) -> DialogResponse:
         state.clarification = clarification
+        state.suggested_rephrase = suggested_rephrase
         state.status = status
         state.closed = closed
         if closed and state.closed_at is None:
@@ -428,6 +529,7 @@ class DialogService:
             id=state.id,
             reply=reply,
             clarification=state.clarification,
+            suggested_rephrase=state.suggested_rephrase,
             tool_calls=tool_calls or [],
             status=state.status,
             line=state.line,
@@ -470,6 +572,7 @@ class DialogService:
                     role=item.role,
                     content=item.content,
                     clarification=item.clarification,
+                    suggested_rephrase=item.suggested_rephrase,
                     tool_calls=item.tool_calls,
                 )
                 for item in state.messages

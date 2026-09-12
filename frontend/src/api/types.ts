@@ -463,6 +463,7 @@ export interface components {
             /** Content */
             content: string;
             clarification?: components["schemas"]["Clarification"] | null;
+            suggested_rephrase?: components["schemas"]["SuggestedRephrase"] | null;
             /** Tool Calls */
             tool_calls?: components["schemas"]["ToolCall"][];
         };
@@ -473,6 +474,7 @@ export interface components {
             /** Reply */
             reply: string;
             clarification?: components["schemas"]["Clarification"] | null;
+            suggested_rephrase?: components["schemas"]["SuggestedRephrase"] | null;
             /** Tool Calls */
             tool_calls?: components["schemas"]["ToolCall"][];
             status?: components["schemas"]["DialogStatus"] | null;
@@ -535,6 +537,7 @@ export interface components {
             /** Reply */
             reply: string;
             clarification?: components["schemas"]["Clarification"] | null;
+            suggested_rephrase?: components["schemas"]["SuggestedRephrase"] | null;
             /** Tool Calls */
             tool_calls?: components["schemas"]["ToolCall"][];
             status?: components["schemas"]["DialogStatus"] | null;
@@ -566,6 +569,8 @@ export interface components {
             content: string;
             /** Clarification Id */
             clarification_id?: string | null;
+            /** Suggestion Id */
+            suggestion_id?: string | null;
         };
         /** SpecialistContact */
         SpecialistContact: {
@@ -578,6 +583,13 @@ export interface components {
              * Format: email
              */
             contact_email: string;
+        };
+        /** SuggestedRephrase */
+        SuggestedRephrase: {
+            /** Id */
+            id: string;
+            /** Content */
+            content: string;
         };
         /**
          * SupportLine
@@ -647,6 +659,7 @@ export type SchemaDialogView = components['schemas']['DialogView'];
 export type SchemaHttpValidationError = components['schemas']['HTTPValidationError'];
 export type SchemaMessageCreate = components['schemas']['MessageCreate'];
 export type SchemaSpecialistContact = components['schemas']['SpecialistContact'];
+export type SchemaSuggestedRephrase = components['schemas']['SuggestedRephrase'];
 export type SchemaSupportLine = components['schemas']['SupportLine'];
 export type SchemaToolCall = components['schemas']['ToolCall'];
 export type SchemaToolStatus = components['schemas']['ToolStatus'];

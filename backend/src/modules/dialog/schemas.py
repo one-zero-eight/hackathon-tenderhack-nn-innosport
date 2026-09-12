@@ -53,12 +53,18 @@ class Clarification(ClarificationQuestion):
     id: str
 
 
+class SuggestedRephrase(BaseSchema):
+    id: str
+    content: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
+
+
 class MessageCreate(BaseSchema):
     content: Annotated[
         str,
         StringConstraints(strip_whitespace=True, min_length=1, max_length=4000),
     ]
     clarification_id: str | None = None
+    suggestion_id: str | None = None
 
 
 class DialogFeedbackCreate(BaseSchema):
@@ -85,6 +91,7 @@ class DialogResponse(BaseSchema):
     id: str
     reply: str
     clarification: Clarification | None = None
+    suggested_rephrase: SuggestedRephrase | None = None
     tool_calls: list[ToolCall] = Field(default_factory=list)
     status: DialogStatus | None = None
     line: SupportLine | None = None
@@ -124,6 +131,7 @@ class DialogMessage(BaseSchema):
     role: str
     content: str
     clarification: Clarification | None = None
+    suggested_rephrase: SuggestedRephrase | None = None
     tool_calls: list[ToolCall] = Field(default_factory=list)
 
 

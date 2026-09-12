@@ -133,6 +133,7 @@ export default function ChatPage() {
                   chat={activeChat}
                   busy={!isNewChat && chat.busy}
                   onAnswerClarification={chat.answerClarification}
+                  onAcceptSuggestion={chat.acceptSuggestion}
                   onNearBottomChange={setNearBottom}
                   afterMessages={
                     !isNewChat && (chat.canFeedback || chat.activeChat.feedback) ? (

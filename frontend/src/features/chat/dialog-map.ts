@@ -29,8 +29,9 @@ export function mapDialogResponse(data: SchemaDialogResponse): ChatReply {
     dialogId: data.id,
     content: data.reply,
     ...(data.status === 'answered' && citations.length ? { citations } : {}),
-    kind: (closed && data.reason !== 'user_closed') || data.clarification ? 'notice' : 'answer',
+    kind: (closed && data.reason !== 'user_closed') || data.clarification || data.suggested_rephrase ? 'notice' : 'answer',
     ...(data.clarification ? { clarification: data.clarification } : {}),
+    ...(data.suggested_rephrase ? { suggestedRephrase: data.suggested_rephrase } : {}),
     ...(data.tool_calls?.length ? { toolCalls: data.tool_calls } : {}),
     closed,
     offerSpecialist: data.status === 'escalate' && !closed,
@@ -56,7 +57,11 @@ function toTimestamp(value?: string | null, fallback?: string): string {
 }
 
 function firstUserTitle(messages: { role: string; content: string }[] | undefined): string {
-  const first = messages?.find((message) => message.role === 'user')?.content.trim().replace(/\s+/g, ' ') ?? ''
+  const first =
+    messages
+      ?.find((message) => message.role === 'user')
+      ?.content.trim()
+      .replace(/\s+/g, ' ') ?? ''
   return first.slice(0, 64)
 }
 
@@ -70,6 +75,7 @@ export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): C
     updatedAt,
     messages: existing?.messages ?? [],
     ...(existing?.clarification ? { clarification: existing.clarification } : {}),
+    ...(existing?.suggestedRephrase ? { suggestedRephrase: existing.suggestedRephrase } : {}),
     status,
     feedbackDismissed: existing?.feedbackDismissed ?? false,
     ...(item.preview ? { preview: item.preview } : existing?.preview ? { preview: existing.preview } : {}),
@@ -93,7 +99,12 @@ export function chatFromDialogView(view: SchemaDialogView, existing?: Chat): Cha
   const updatedAt = toTimestamp(view.updated_at, existing?.updatedAt)
   if (existing?.messages.length && updatedAt < existing.updatedAt) return existing
   const title = firstUserTitle(view.messages) || existing?.title || 'Новое обращение'
-  const preview = [...(view.messages ?? [])].reverse().find((message) => message.role === 'user')?.content.trim().replace(/\s+/g, ' ').slice(0, 80)
+  const preview = [...(view.messages ?? [])]
+    .reverse()
+    .find((message) => message.role === 'user')
+    ?.content.trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 80)
   const messages = mapViewMessages(view, existing)
   return chatFromListItem(
     {
@@ -107,14 +118,14 @@ export function chatFromDialogView(view: SchemaDialogView, existing?: Chat): Cha
       feedback: view.feedback,
       updated_at: updatedAt,
     },
-    { ...(existing ?? createChat(view.id, updatedAt)), messages, clarification: view.clarification ?? undefined },
+    { ...(existing ?? createChat(view.id, updatedAt)), messages, clarification: view.clarification ?? undefined, suggestedRephrase: view.suggested_rephrase ?? undefined },
   )
 }
 
 function mapViewMessages(view: SchemaDialogView, existing?: Chat): ChatMessage[] {
   const raw = view.messages ?? []
   const lastReply = mapDialogResponse(view)
-  const previousMessages = existing?.messages.filter((message) => message.kind !== 'notice' || message.clarification)
+  const previousMessages = existing?.messages.filter((message) => message.kind !== 'notice' || message.clarification || message.suggestedRephrase)
   return raw.map((message, index) => {
     const role = message.role === 'user' ? 'user' : 'assistant'
     const candidate = previousMessages?.[index]
@@ -127,12 +138,19 @@ function mapViewMessages(view: SchemaDialogView, existing?: Chat): ChatMessage[]
       content: isLastAssistant ? lastReply.content : message.content,
       ...(citations?.length ? { citations } : {}),
       createdAt: previous?.createdAt ?? toTimestamp(view.updated_at),
-      ...(role === 'assistant' ? { kind: message.clarification ? 'notice' : isLastAssistant ? lastReply.kind : 'answer' } : {}),
+      ...(role === 'assistant' ? { kind: message.clarification || message.suggested_rephrase ? 'notice' : isLastAssistant ? lastReply.kind : 'answer' } : {}),
       ...(role === 'assistant' && message.clarification ? { clarification: message.clarification } : {}),
       ...(previous?.clarificationId ? { clarificationId: previous.clarificationId } : {}),
+      ...(role === 'assistant' ? suggestedRephraseOf(view, message, isLastAssistant) : {}),
+      ...(previous?.suggestionId ? { suggestionId: previous.suggestionId } : {}),
       ...(role === 'assistant' && message.tool_calls?.length ? { toolCalls: message.tool_calls } : {}),
     }
   })
+}
+
+function suggestedRephraseOf(view: SchemaDialogView, message: { suggested_rephrase?: SchemaDialogView['suggested_rephrase'] }, isLastAssistant: boolean) {
+  const suggestion = isLastAssistant ? (view.suggested_rephrase ?? message.suggested_rephrase) : message.suggested_rephrase
+  return suggestion ? { suggestedRephrase: suggestion } : {}
 }
 
 function sameChat(left: Chat, right: Chat): boolean {
@@ -145,6 +163,7 @@ function sameChat(left: Chat, right: Chat): boolean {
     left.closedAt === right.closedAt &&
     left.offerSpecialist === right.offerSpecialist &&
     left.clarification === right.clarification &&
+    left.suggestedRephrase === right.suggestedRephrase &&
     left.feedbackDismissed === right.feedbackDismissed &&
     left.messages === right.messages &&
     left.handoff === right.handoff &&

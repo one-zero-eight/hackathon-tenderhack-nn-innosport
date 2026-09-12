@@ -30,7 +30,7 @@ async function postDialogMessage(postMessage: PostMessage, createDialog: CreateD
     return await postMessage({ params: { path: { dialog_id: dialogId } }, body, signal })
   } catch (error) {
     if (isDialogPayload(error)) return error
-    if (!isDialogNotFound(error) || body.clarification_id) throw error
+    if (!isDialogNotFound(error) || body.clarification_id || body.suggestion_id) throw error
     const created = await createDialog({ signal })
     try {
       return await postMessage({ params: { path: { dialog_id: created.id } }, body, signal })
@@ -68,7 +68,11 @@ export function useApiTransport(): ChatTransport {
         const message = messages.at(-1)
         const content = message?.content.trim() ?? ''
         if (!content) throw new Error('Empty message')
-        const body: SchemaMessageCreate = { content, ...(message?.clarificationId ? { clarification_id: message.clarificationId } : {}) }
+        const body: SchemaMessageCreate = {
+          content,
+          ...(message?.clarificationId ? { clarification_id: message.clarificationId } : {}),
+          ...(message?.suggestionId ? { suggestion_id: message.suggestionId } : {}),
+        }
         const reply = mapDialogResponse(await postDialogMessage((init) => streamMessage(init, onText, onTool), createDialog, body, signal, chatId))
         invalidateDialogs()
         return reply

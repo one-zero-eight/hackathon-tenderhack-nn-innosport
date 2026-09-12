@@ -13,6 +13,7 @@ from src.modules.dialog.schemas import (
     DialogStatus,
     DialogSummary,
     SpecialistContact,
+    SuggestedRephrase,
     SupportLine,
     ToolCall,
 )
@@ -27,6 +28,7 @@ class StoredMessage(BaseSchema):
     role: str
     content: str
     clarification: Clarification | None = None
+    suggested_rephrase: SuggestedRephrase | None = None
     tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
@@ -40,6 +42,7 @@ class ConversationState(BaseSchema):
     id: str
     revision: int = 0
     clarification: Clarification | None = None
+    suggested_rephrase: SuggestedRephrase | None = None
     closed: bool = False
     closed_at: dtm.datetime | None = None
     summary: DialogSummary | None = None

@@ -14,6 +14,7 @@ from src.modules.dialog.schemas import (
     DialogStatus,
     DialogSummary,
     SpecialistContact,
+    SuggestedRephrase,
     SupportLine,
     ToolCall,
 )
@@ -32,6 +33,7 @@ class ConversationMessageSchema(BaseSchema):
     role: str
     content: str
     clarification: Clarification | None = None
+    suggested_rephrase: SuggestedRephrase | None = None
     tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
@@ -44,6 +46,7 @@ class ConversationCitationSchema(BaseSchema):
 class ConversationSchema(BaseSchema):
     revision: int = 0
     clarification: Clarification | None = None
+    suggested_rephrase: SuggestedRephrase | None = None
     closed: bool = False
     closed_at: dtm.datetime | None = None
     summary: DialogSummary | None = None
@@ -86,6 +89,7 @@ def document_to_state(document: Conversation) -> ConversationState:
         id=str(document.id),
         revision=document.revision,
         clarification=document.clarification,
+        suggested_rephrase=document.suggested_rephrase,
         closed=document.closed,
         closed_at=document.closed_at or (document.updated_at if document.closed else None),
         summary=document.summary,
@@ -109,6 +113,7 @@ def document_to_state(document: Conversation) -> ConversationState:
                 role=item.role,
                 content=item.content,
                 clarification=item.clarification,
+                suggested_rephrase=item.suggested_rephrase,
                 tool_calls=item.tool_calls,
             )
             for item in document.messages
@@ -158,6 +163,9 @@ class MongoConversationStore:
             {
                 "$set": {
                     "clarification": state.clarification.model_dump(mode="python") if state.clarification else None,
+                    "suggested_rephrase": (
+                        state.suggested_rephrase.model_dump(mode="python") if state.suggested_rephrase else None
+                    ),
                     "closed": state.closed,
                     "closed_at": state.closed_at,
                     "summary": state.summary.model_dump(mode="python") if state.summary else None,
@@ -184,6 +192,7 @@ class MongoConversationStore:
                             role=item.role,
                             content=item.content,
                             clarification=item.clarification,
+                            suggested_rephrase=item.suggested_rephrase,
                             tool_calls=item.tool_calls,
                         ).model_dump(mode="python")
                         for item in state.messages

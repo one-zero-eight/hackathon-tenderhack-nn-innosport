@@ -15,6 +15,7 @@ import {
   isChatReply,
   isSpecialistResponse,
   pendingClarificationMessageId,
+  pendingSuggestedRephraseMessageId,
   parseChatHistory,
   serializeChatHistory,
   submitFeedback as submitFeedbackModel,
@@ -22,7 +23,7 @@ import {
   withoutChat,
 } from './model.ts'
 import type { ChatHistory } from './model.ts'
-import type { Chat, ChatMessage, ChatTransport, ClarificationRequest, FeedbackRating } from './types.ts'
+import type { Chat, ChatMessage, ChatTransport, ClarificationRequest, FeedbackRating, SuggestedRephrase } from './types.ts'
 
 let fallbackId = 0
 function newId(): string {
@@ -55,6 +56,7 @@ export interface UseChatResult {
   syncDialog: (view: SchemaDialogView) => void
   send: (text: string) => Promise<boolean>
   answerClarification: (request: ClarificationRequest, content: string) => Promise<boolean>
+  acceptSuggestion: (suggestion: SuggestedRephrase) => Promise<boolean>
   closeChat: () => Promise<boolean>
   contactSpecialist: (contact: SchemaSpecialistContact) => Promise<boolean>
   submitFeedback: (rating: FeedbackRating, comment: string) => Promise<boolean>
@@ -186,12 +188,14 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
   )
 
   const submit = useCallback(
-    async (chatId: string, content: string, clarificationId?: string): Promise<boolean> => {
+    async (chatId: string, content: string, clarificationId?: string, suggestionId?: string): Promise<boolean> => {
       // This synchronous ref lock catches same-tick double clicks before React renders.
       if (operations.current.has(chatId)) return false
       const chat = historyRef.current.chats.find((item) => item.id === chatId)
       if (!chat || chat.status !== 'open' || !content.trim()) return false
+      if (clarificationId && suggestionId) return false
       if (clarificationId && (chat.clarification?.id !== clarificationId || !pendingClarificationMessageId(chat))) return false
+      if (suggestionId && (chat.suggestedRephrase?.id !== suggestionId || !pendingSuggestedRephraseMessageId(chat))) return false
       const controller = new AbortController()
       operations.current.set(chatId, controller)
       setBusyChats((current) => ({ ...current, [chatId]: true }))
@@ -203,10 +207,11 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
         content: content.trim(),
         createdAt: new Date().toISOString(),
         ...(clarificationId ? { clarificationId } : {}),
+        ...(suggestionId ? { suggestionId } : {}),
       }
       // Display the outgoing message without persisting an unconfirmed exchange.
       setPendingMessages((current) => ({ ...current, [chatId]: userMessage }))
-      if (!clarificationId && originalDraft.trim() === userMessage.content) {
+      if (!clarificationId && !suggestionId && originalDraft.trim() === userMessage.content) {
         const nextDrafts = { ...draftsRef.current, [chatId]: '' }
         draftsRef.current = nextDrafts
         setDrafts(nextDrafts)
@@ -260,7 +265,7 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
         if (mounted.current && !controller.signal.aborted) {
           // Restore the failed query without overwriting a newly typed draft.
           const draft = draftsRef.current[chatId] ?? ''
-          if (!clarificationId) {
+          if (!clarificationId && !suggestionId) {
             const nextDrafts = { ...draftsRef.current, [chatId]: draft || originalDraft || content }
             draftsRef.current = nextDrafts
             setDrafts(nextDrafts)
@@ -269,9 +274,11 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
             ...current,
             [chatId]: clarificationId
               ? 'Не удалось отправить уточнение. Ваш выбор сохранён — попробуйте ещё раз.'
-              : draft
-                ? `Не удалось получить ответ на вопрос «${userMessage.content}». Новый черновик сохранён — повторите вопрос позже.`
-                : 'Не удалось получить ответ. Ваш ввод сохранён — попробуйте ещё раз.',
+              : suggestionId
+                ? 'Не удалось отправить перефразированный вопрос. Попробуйте ещё раз.'
+                : draft
+                  ? `Не удалось получить ответ на вопрос «${userMessage.content}». Новый черновик сохранён — повторите вопрос позже.`
+                  : 'Не удалось получить ответ. Ваш ввод сохранён — попробуйте ещё раз.',
           }))
         }
         return false
@@ -311,6 +318,8 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
   )
 
   const answerClarification = useCallback((request: ClarificationRequest, content: string): Promise<boolean> => submit(historyRef.current.activeChatId, content, request.id), [submit])
+
+  const acceptSuggestion = useCallback((suggestion: SuggestedRephrase): Promise<boolean> => submit(historyRef.current.activeChatId, suggestion.content, undefined, suggestion.id), [submit])
 
   // Ref-backed synchronous updates make lifecycle actions same-tick idempotent.
   const updateActiveChat = useCallback(
@@ -542,6 +551,7 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
     syncDialog,
     send,
     answerClarification,
+    acceptSuggestion,
     closeChat,
     contactSpecialist,
     submitFeedback,

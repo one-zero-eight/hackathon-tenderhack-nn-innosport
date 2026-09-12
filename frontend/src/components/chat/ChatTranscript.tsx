@@ -1,8 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { LuCheck, LuChevronDown, LuCircleAlert, LuClock, LuFileText, LuLoaderCircle, LuSparkles, LuWrench } from 'react-icons/lu'
-import type { Chat, ChatMessage, ChatToolStatus, ClarificationRequest } from '@/features/chat/types'
-import { pendingClarificationMessageId } from '@/features/chat/model'
+import type { Chat, ChatMessage, ChatToolStatus, ClarificationRequest, SuggestedRephrase } from '@/features/chat/types'
+import { pendingClarificationMessageId, pendingSuggestedRephraseMessageId } from '@/features/chat/model'
 import ClarificationCard from './ClarificationCard'
+import SuggestedRephraseAction from './SuggestedRephraseAction'
 import ChatOutline from './ChatOutline'
 import MarkdownMessage from './MarkdownMessage'
 import PdfSourceDialog from './PdfSourceDialog'
@@ -18,6 +19,7 @@ interface ChatTranscriptProps {
   afterMessages?: ReactNode
   onNearBottomChange?: (nearBottom: boolean) => void
   onAnswerClarification?: (request: ClarificationRequest, content: string) => Promise<boolean>
+  onAcceptSuggestion?: (suggestion: SuggestedRephrase) => Promise<boolean>
 }
 
 const toolStatuses = {
@@ -40,6 +42,7 @@ const toolActivityLabels: Record<string, string> = {
   read_section: 'Изучаем инструкцию…',
   ask_clarification: 'Уточняем вопрос…',
   respond: 'Готовим ответ…',
+  moderate: 'Проверяем формулировку…',
 }
 
 function ToolActivity({ message }: { message: ChatMessage }) {
@@ -49,7 +52,7 @@ function ToolActivity({ message }: { message: ChatMessage }) {
     <details className="group/activity mb-2 text-xs">
       <summary className="text-foreground/40 hover:text-foreground/65 focus-visible:outline-primary flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded py-1 focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden">
         {running ? <LuLoaderCircle aria-hidden="true" className="size-3 shrink-0 animate-spin motion-reduce:animate-none" /> : <LuWrench aria-hidden="true" className="size-3 shrink-0" />}
-        <span aria-live={message.pending ? 'polite' : 'off'}>{running ? `${toolStatus(running, true) === 'preparing' ? 'Подготовка вызова' : toolActivityLabels[running.name] ?? 'Выполняется'} · ${running.name}` : 'Детали ответа'}</span>
+        <span aria-live={message.pending ? 'polite' : 'off'}>{running ? `${toolStatus(running, true) === 'preparing' ? 'Подготовка вызова' : (toolActivityLabels[running.name] ?? 'Выполняется')} · ${running.name}` : 'Детали ответа'}</span>
         <LuChevronDown aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/activity:rotate-180 motion-reduce:transition-none" />
       </summary>
       <ol aria-label="Вызовы инструментов" className="border-foreground/10 mt-1 max-h-72 space-y-2 overflow-y-auto border-l pl-3">
@@ -83,7 +86,7 @@ function ToolActivity({ message }: { message: ChatMessage }) {
   )
 }
 
-const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onNearBottomChange, onAnswerClarification }, ref) => {
+const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onNearBottomChange, onAnswerClarification, onAcceptSuggestion }, ref) => {
   const [activeMessage, setActiveMessage] = useState('')
   const [pdfSource, setPdfSource] = useState<{ chatId: string; citation: NonNullable<ChatMessage['citations']>[number] } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -92,7 +95,8 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
   const previousUserMessage = useRef<string | undefined>(undefined)
   const messages = chat.messages
   const pendingClarificationId = pendingClarificationMessageId(chat)
-  const lastUserIndex = messages.reduce((last, message, index) => message.role === 'user' ? index : last, -1)
+  const pendingSuggestionId = pendingSuggestedRephraseMessageId(chat)
+  const lastUserIndex = messages.reduce((last, message, index) => (message.role === 'user' ? index : last), -1)
   const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.id
   const streamingMessage = messages.find((message) => message.role === 'assistant' && message.pending)
   const latestContent = messages.at(-1)?.content
@@ -213,7 +217,7 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                                     type="button"
                                     disabled={!pdfSourceUrl(citation.path)}
                                     onClick={() => setPdfSource({ chatId: chat.id, citation })}
-                                    className="focus-visible:outline-primary min-w-0 rounded text-left break-words enabled:cursor-pointer enabled:hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2"
+                                    className="focus-visible:outline-primary enabled:hover:text-primary min-w-0 rounded text-left break-words focus-visible:outline-2 focus-visible:outline-offset-2 enabled:cursor-pointer"
                                     aria-haspopup="dialog"
                                   >
                                     <span className={pdfSourceUrl(citation.path) ? 'underline decoration-current/30 underline-offset-4' : ''}>{citation.document.replace(/_/g, ' ').trim() || citation.path}</span>
@@ -245,6 +249,16 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                       busy={busy}
                       closed={chat.status === 'closed'}
                       onAnswer={message.id === pendingClarificationId ? onAnswerClarification : undefined}
+                    />
+                  )}
+                  {message.role === 'assistant' && message.suggestedRephrase && (
+                    <SuggestedRephraseAction
+                      key={message.suggestedRephrase.id}
+                      suggestion={message.suggestedRephrase}
+                      answered={index < lastUserIndex}
+                      busy={busy}
+                      closed={chat.status === 'closed'}
+                      onAccept={message.id === pendingSuggestionId ? onAcceptSuggestion : undefined}
                     />
                   )}
                   {message.kind === 'handoff' && chat.handoff?.simulated && <p className="text-foreground/45 text-ui-small mt-2">Демонстрация: реальная заявка не отправлена, связь со специалистом не установлена.</p>}

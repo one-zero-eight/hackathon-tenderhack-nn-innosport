@@ -6,6 +6,11 @@ export interface ClarificationRequest {
   options: string[]
 }
 
+export interface SuggestedRephrase {
+  id: string
+  content: string
+}
+
 export type ChatMessageKind = 'answer' | 'handoff' | 'notice'
 export type FeedbackRating = 'complete' | 'partial' | 'irrelevant'
 
@@ -50,6 +55,8 @@ export interface ChatMessage {
   toolCalls?: (ToolCall | ChatToolCall)[]
   clarification?: ClarificationRequest
   clarificationId?: string
+  suggestedRephrase?: SuggestedRephrase
+  suggestionId?: string
   pending?: boolean
 }
 
@@ -66,6 +73,7 @@ export interface Chat {
   feedbackDismissed: boolean
   offerSpecialist?: boolean
   clarification?: ClarificationRequest
+  suggestedRephrase?: SuggestedRephrase
 }
 
 export interface ChatReply {
@@ -77,6 +85,7 @@ export interface ChatReply {
   offerSpecialist?: boolean
   dialogId?: string
   clarification?: ClarificationRequest
+  suggestedRephrase?: SuggestedRephrase
 }
 
 export interface ChatTransport {

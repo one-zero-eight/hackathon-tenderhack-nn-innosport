@@ -109,7 +109,12 @@ async def delete_dialog(dialog_id: str, service: DialogServiceDep) -> DialogDele
 @router.post("/dialogs/{dialog_id}/messages")
 async def post_message(dialog_id: str, payload: MessageCreate, service: DialogServiceDep) -> DialogResponse:
     try:
-        return await service.add_message(dialog_id, payload.content, clarification_id=payload.clarification_id)
+        return await service.add_message(
+            dialog_id,
+            payload.content,
+            clarification_id=payload.clarification_id,
+            suggestion_id=payload.suggestion_id,
+        )
     except DialogClosedError as exc:
         return JSONResponse(status_code=exc.status_code, content=exc.detail)
 
@@ -127,7 +132,12 @@ async def post_message(dialog_id: str, payload: MessageCreate, service: DialogSe
 )
 async def stream_message(dialog_id: str, payload: MessageCreate, service: DialogServiceDep) -> StreamingResponse:
     try:
-        events = await service.stream_message(dialog_id, payload.content, clarification_id=payload.clarification_id)
+        events = await service.stream_message(
+            dialog_id,
+            payload.content,
+            clarification_id=payload.clarification_id,
+            suggestion_id=payload.suggestion_id,
+        )
     except DialogClosedError as exc:
         return JSONResponse(status_code=exc.status_code, content=exc.detail)
     return DialogStreamingResponse(
