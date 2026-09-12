@@ -1,8 +1,6 @@
-# InnoSport
+# ИИ-помощник
 
-> by InNoHassle
-
-InnoSport is built with React, TypeScript, Tailwind CSS, and Vite.
+ИИ-помощник is built with React, TypeScript, Tailwind CSS, and Vite.
 
 ## Stack
 
@@ -59,7 +57,7 @@ existing specialist handoff.
 - Demo transport: `frontend/src/features/chat/demo-transport.ts`
 - State and storage: `frontend/src/features/chat/useChat.ts`
 
-Chat history is saved under `innosport.chat.v1` in browser localStorage. Do not
+Chat history is saved under `support.chat.v1` in browser localStorage. Do not
 enter sensitive data; clearing this key removes saved chats. Drafts stay in memory
 per chat. Storage failures fall back to in-memory operation. The stored payload
 is now version 2; valid version 1 conversations are migrated in place as open

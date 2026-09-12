@@ -98,7 +98,7 @@ export default function ChatPage() {
                     <span className="border-primary/10 bg-primary/5 text-primary mx-auto mb-6 grid size-16 place-items-center rounded-2xl border">
                       <LuSparkles className="size-7" />
                     </span>
-                    <p className="text-primary text-ui-small mb-3 font-medium tracking-[0.2em] uppercase">InnoSport · Помощник</p>
+                    <p className="text-primary text-ui-small mb-3 font-medium tracking-[0.2em] uppercase">ИИ-Помощник</p>
                     <h2 className="text-ui-title font-semibold tracking-tight">Чем можем помочь?</h2>
                     <p className="text-foreground/55 text-ui-body mx-auto mt-4 max-w-md leading-7">Опишите ваш вопрос — ассистент поможет разобраться и при необходимости уточнит детали.</p>
                   </section>

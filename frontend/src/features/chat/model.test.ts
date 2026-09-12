@@ -256,7 +256,7 @@ test('v1 migration preserves valid history, IDs, timestamps, count and pending w
     messages: [user('u1', 'old-question'), { id: 'a1', role: 'assistant', content: 'Legacy answer-like text', createdAt: now }, { id: 'a2', role: 'assistant', content: 'Question', createdAt: now, clarification: request }],
   }
   const migrated = parseChatHistory(JSON.stringify({ version: 1, chats: [old], activeChatId: old.id }))!
-  assert.equal(CHAT_STORAGE_KEY, 'innosport.chat.v1')
+  assert.equal(CHAT_STORAGE_KEY, 'support.chat.v1')
   assert.equal(migrated.version, 2)
   const chat = migrated.chats[0]
   assert.equal(chat.title, 'Новое обращение')

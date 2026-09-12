@@ -2,7 +2,7 @@ import type { Chat, ChatMessage, ChatMessageKind, ChatReply, ClarificationAnswer
 
 // Keep the original key so valid v1 local history is migrated in place.
 // Neither conversations nor feedback are submitted to a backend by persistence.
-export const CHAT_STORAGE_KEY = 'innosport.chat.v1'
+export const CHAT_STORAGE_KEY = 'support.chat.v1'
 export const CHAT_STORAGE_VERSION = 2
 
 export interface ChatHistory {
