@@ -60,14 +60,16 @@ export function reopenChat(chat: Chat, noticeId: string, now: string): Chat {
 
 /** Call only after the optional transport has successfully returned a valid response. */
 export function applySpecialistHandoff(chat: Chat, response: SpecialistResponse, messageId: string, now: string): Chat {
-  if (!canContactSpecialist(chat) || !isSpecialistResponse(response)) return chat
+  if (!canContactSpecialist(chat) || !isSpecialistResponse(response) || (!response.simulated && !response.line)) return chat
   const specialistType = response.specialistType?.trim()
   const next: Chat = {
     ...chat, updatedAt: now, offerSpecialist: false,
-    handoff: { requestId: response.requestId, simulated: response.simulated, ...(specialistType ? { specialistType } : {}), createdAt: now },
+    handoff: { requestId: response.requestId, simulated: response.simulated, ...(response.line ? { line: response.line } : {}), ...(specialistType ? { specialistType } : {}), createdAt: now },
     messages: [...chat.messages, {
       id: messageId, role: 'assistant', kind: 'handoff', createdAt: now,
-      content: specialistType ? `Специалист по ${specialistType} скоро свяжется с Вами` : 'Специалист службы поддержки скоро свяжется с Вами',
+      content: response.simulated
+        ? 'Демонстрация: обращение передано специалисту. Реальная заявка не отправлена.'
+        : `Ваш запрос отправлен на ${response.line!.slice(1)} линию поддержки`,
     }],
   }
   if (!response.closed) return next
@@ -135,7 +137,7 @@ export function isSpecialistResponse(value: unknown): value is SpecialistRespons
     typeof value.simulated === 'boolean' &&
     (value.specialistType === undefined || typeof value.specialistType === 'string') &&
     (value.closed === undefined || typeof value.closed === 'boolean') &&
-    (value.line === undefined || value.line === 'L1' || value.line === 'L2')
+    (value.line === undefined || value.line === 'L1' || value.line === 'L2' || value.line === 'L3')
   )
 }
 
@@ -189,7 +191,7 @@ function migrateChat(value: unknown, version: number): Chat | null {
       kind: message.kind === 'clarification' ? 'notice' : message.kind ?? 'notice',
     })),
     ...(status === 'closed' ? { closedAt: value.closedAt as string } : {}),
-    ...(handoff ? { handoff: { requestId: handoff.requestId as string, simulated: handoff.simulated as boolean, ...(handoff.specialistType !== undefined ? { specialistType: handoff.specialistType as string } : {}), createdAt: handoff.createdAt as string } } : {}),
+    ...(handoff ? { handoff: { requestId: handoff.requestId as string, simulated: handoff.simulated as boolean, ...(handoff.line ? { line: handoff.line } : {}), ...(handoff.specialistType !== undefined ? { specialistType: handoff.specialistType as string } : {}), createdAt: handoff.createdAt as string } } : {}),
     ...(feedback ? { feedback: { rating: feedback.rating as FeedbackRating, comment: feedback.rating === 'complete' ? '' : feedback.comment as string, submittedAt: feedback.submittedAt as string } } : {}),
     ...(value.offerSpecialist ? { offerSpecialist: true } : {}),
     ...(typeof value.preview === 'string' && value.preview ? { preview: value.preview } : {}),

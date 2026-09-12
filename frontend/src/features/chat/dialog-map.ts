@@ -40,17 +40,16 @@ export function mapDialogResponse(data: SchemaDialogResponse): ChatReply {
 }
 
 export function mapSpecialistResponse(data: SchemaDialogResponse): SpecialistResponse {
-  const line = data.line === 'L1' || data.line === 'L2' ? data.line : undefined
+  const line = data.line
+  if (data.status !== 'escalate' || !data.closed || (line !== 'L1' && line !== 'L2' && line !== 'L3')) {
+    throw new Error('Invalid specialist escalation response')
+  }
   return {
     requestId: data.id,
     simulated: false,
     closed: Boolean(data.closed),
-    ...(line ? { line, specialistType: specialistTypeForLine(line) } : {}),
+    line,
   }
-}
-
-function specialistTypeForLine(line: 'L1' | 'L2'): string {
-  return line === 'L2' ? 'инцидентам и закупкам (L2)' : 'первой линии поддержки (L1)'
 }
 
 function toTimestamp(value?: string | null, fallback?: string): string {
@@ -66,7 +65,7 @@ function firstUserTitle(messages: { role: string; content: string }[] | undefine
 export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): Chat {
   const status = item.closed ? 'closed' : 'open'
   const updatedAt = toTimestamp(item.updated_at, existing?.updatedAt)
-  const line = item.line === 'L1' || item.line === 'L2' ? item.line : undefined
+  const line = item.line === 'L1' || item.line === 'L2' || item.line === 'L3' ? item.line : undefined
   const chat: Chat = {
     id: item.id,
     title: item.title || existing?.title || 'Новое обращение',
@@ -85,7 +84,7 @@ export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): C
       requestId: item.id,
       simulated: false,
       createdAt: existing?.handoff?.createdAt ?? updatedAt,
-      ...(line ? { line, specialistType: specialistTypeForLine(line) } : {}),
+      ...(line ? { line } : {}),
     }
   }
   return chat

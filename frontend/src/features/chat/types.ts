@@ -1,3 +1,5 @@
+import type { SchemaSupportLine } from '../../api/types.ts'
+
 export type ChatMessageKind = 'answer' | 'handoff' | 'notice'
 export type FeedbackRating = 'complete' | 'partial' | 'irrelevant'
 
@@ -6,7 +8,7 @@ export interface SpecialistResponse {
   requestId: string
   simulated: boolean
   closed?: boolean
-  line?: 'L1' | 'L2'
+  line?: SchemaSupportLine
 }
 
 export interface ChatHandoff extends SpecialistResponse {
