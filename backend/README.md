@@ -81,7 +81,12 @@ http POST :8000/dialogs/$DIALOG_ID/messages content="вы идиоты, как �
 http POST :8000/dialogs/$DIALOG_ID/messages content="уже не помогло, закупка 1234567890"
 http POST :8000/dialogs/$DIALOG_ID/escalate
 http GET :8000/dialogs/$DIALOG_ID
+http GET :8000/dialogs
 ```
+
+`GET /dialogs` returns a newest-first list for the sidebar: `id`, `title`,
+`preview`, `status`, `topic`, `line`, `closed`, `reason`, `updated_at`. Full
+message history stays on `GET /dialogs/{id}`.
 
 Equivalent curl:
 

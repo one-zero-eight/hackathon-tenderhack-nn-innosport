@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from src.api import docs
-from src.modules.dialog.schemas import DialogResponse, DialogView, MessageCreate
+from src.modules.dialog.schemas import DialogListItem, DialogResponse, DialogView, MessageCreate
 from src.modules.dialog.service import DialogClosedError, DialogService
 
 router = APIRouter(tags=["dialog"])
@@ -28,6 +28,14 @@ DialogServiceDep = Annotated[DialogService, Depends(get_dialog_service)]
 @router.post("/dialogs", response_model=DialogView)
 async def create_dialog(service: DialogServiceDep) -> DialogView:
     return await service.create()
+
+
+@router.get("/dialogs", response_model=list[DialogListItem])
+async def list_dialogs(
+    service: DialogServiceDep,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[DialogListItem]:
+    return await service.list_dialogs(limit=limit)
 
 
 @router.get("/dialogs/{dialog_id}", response_model=DialogView)

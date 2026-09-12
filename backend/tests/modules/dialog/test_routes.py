@@ -5,6 +5,35 @@ from src.modules.dialog.schemas import DialogStatus, SupportLine
 from tests.modules.dialog.conftest import make_client, make_service
 
 
+def test_list_dialogs_returns_summaries_newest_first() -> None:
+    client = make_client()
+    empty = client.post("/dialogs").json()
+    older = client.post("/dialogs").json()
+    client.post(
+        f"/dialogs/{older['id']}/messages",
+        json={"content": "Как зарегистрироваться поставщику на портале?"},
+    )
+    newer = client.post("/dialogs").json()
+    client.post(f"/dialogs/{newer['id']}/messages", json={"content": "помогите"})
+
+    listed = client.get("/dialogs")
+    assert listed.status_code == 200
+    items = listed.json()
+    ids = [item["id"] for item in items]
+    assert ids[:3] == [newer["id"], older["id"], empty["id"]]
+    by_id = {item["id"]: item for item in items}
+    assert by_id[empty["id"]]["title"] == "Новое обращение"
+    assert by_id[empty["id"]]["preview"] == ""
+    assert by_id[empty["id"]]["closed"] is False
+    assert by_id[older["id"]]["title"] == "Регистрация"
+    assert by_id[older["id"]]["topic"]["id"] == "t-001"
+    assert by_id[older["id"]]["preview"] == "Как зарегистрироваться поставщику на портале?"
+    assert by_id[newer["id"]]["title"] == "помогите"
+    assert by_id[newer["id"]]["status"] == DialogStatus.CLARIFYING
+    assert "messages" not in by_id[newer["id"]]
+    assert by_id[newer["id"]]["updated_at"]
+
+
 def test_routes_faq_and_history() -> None:
     client = make_client()
     created = client.post("/dialogs")

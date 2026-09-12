@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 from beanie import PydanticObjectId
 from pydantic import Field
@@ -11,6 +12,7 @@ from src.modules.dialog.store import (
     ConversationState,
     StoredCitation,
     StoredMessage,
+    utcnow,
 )
 from src.pydantic_base import BaseSchema
 from src.storages.mongo.__base__ import CustomDocument
@@ -38,6 +40,7 @@ class ConversationSchema(BaseSchema):
     pending_option_ids: list[str] = Field(default_factory=list)
     citations: list[ConversationCitationSchema] = Field(default_factory=list)
     messages: list[ConversationMessageSchema] = Field(default_factory=list)
+    updated_at: datetime | None = None
 
 
 class Conversation(ConversationSchema, CustomDocument):
@@ -45,6 +48,21 @@ class Conversation(ConversationSchema, CustomDocument):
         name = "conversations"
         keep_nulls = False
         max_nesting_depth = 1
+        indexes = ["updated_at"]
+
+
+def _document_updated_at(document: Conversation) -> datetime:
+    if document.updated_at is not None:
+        value = document.updated_at
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+    if document.id is not None:
+        generated = document.id.generation_time
+        if generated.tzinfo is None:
+            return generated.replace(tzinfo=timezone.utc)
+        return generated
+    return utcnow()
 
 
 def document_to_state(document: Conversation) -> ConversationState:
@@ -67,14 +85,19 @@ def document_to_state(document: Conversation) -> ConversationState:
             for item in document.citations
         ],
         messages=[StoredMessage(role=item.role, content=item.content) for item in document.messages],
+        updated_at=_document_updated_at(document),
     )
 
 
 class MongoConversationStore:
     async def create(self) -> ConversationState:
-        document = Conversation()
+        document = Conversation(updated_at=utcnow())
         await document.insert()
         return document_to_state(document)
+
+    async def list(self, *, limit: int = 100) -> list[ConversationState]:
+        documents = await Conversation.find_all().sort("-updated_at").limit(limit).to_list()
+        return [document_to_state(document) for document in documents]
 
     async def get(self, dialog_id: str) -> ConversationState | None:
         object_id = self._object_id(dialog_id)
@@ -97,6 +120,7 @@ class MongoConversationStore:
                     {"revision": {"$exists": False}},
                 ]
             }
+        state.updated_at = utcnow()
         result = await Conversation.get_motor_collection().update_one(
             {"_id": object_id, **revision_filter},
             {
@@ -108,6 +132,7 @@ class MongoConversationStore:
                     "reason": state.reason,
                     "failed_clarifications": state.failed_clarifications,
                     "pending_option_ids": list(state.pending_option_ids),
+                    "updated_at": state.updated_at,
                     "citations": [
                         ConversationCitationSchema(
                             document=item.document,

@@ -15,6 +15,7 @@ from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_reply
 from src.modules.dialog.routing import is_l2_request
 from src.modules.dialog.schemas import (
     Citation,
+    DialogListItem,
     DialogMessage,
     DialogResponse,
     DialogStatus,
@@ -68,6 +69,9 @@ class DialogService:
         state = await self._require(dialog_id)
         reply = next((item.content for item in reversed(state.messages) if item.role == "assistant"), "")
         return self._view(state, reply=reply)
+
+    async def list_dialogs(self, *, limit: int = 100) -> list[DialogListItem]:
+        return [self._list_item(state) for state in await self.store.list(limit=limit)]
 
     async def add_message(self, dialog_id: str, content: str) -> DialogResponse:
         state = await self._require(dialog_id)
@@ -302,6 +306,24 @@ class DialogService:
             citations=citations or [],
             closed=state.closed,
             reason=state.reason,
+            updated_at=state.updated_at,
+        )
+
+    def _list_item(self, state: ConversationState) -> DialogListItem:
+        topic = self._topic_ref(state=state)
+        first_user = next((item.content for item in state.messages if item.role == "user"), "")
+        last_user = next((item.content for item in reversed(state.messages) if item.role == "user"), "")
+        title = topic.title if topic is not None else _preview_text(first_user) or "Новое обращение"
+        return DialogListItem(
+            id=state.id,
+            title=title,
+            preview=_preview_text(last_user or first_user),
+            status=state.status,
+            topic=topic,
+            line=state.line,
+            closed=state.closed,
+            reason=state.reason,
+            updated_at=state.updated_at,
         )
 
     def _view(self, state: ConversationState, reply: str) -> DialogView:
@@ -316,3 +338,10 @@ class DialogService:
             **base.model_dump(),
             messages=[DialogMessage(role=item.role, content=item.content) for item in state.messages],
         )
+
+
+def _preview_text(text: str, *, limit: int = 80) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"

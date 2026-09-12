@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated
 
@@ -48,6 +49,19 @@ class DialogResponse(BaseSchema):
     citations: list[Citation] = Field(default_factory=list)
     closed: bool = False
     reason: str | None = None
+    updated_at: datetime | None = None
+
+
+class DialogListItem(BaseSchema):
+    id: str
+    title: str
+    preview: str = ""
+    status: DialogStatus | None = None
+    topic: TopicRef | None = None
+    line: SupportLine | None = None
+    closed: bool = False
+    reason: str | None = None
+    updated_at: datetime
 
 
 class DialogMessage(BaseSchema):
