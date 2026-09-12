@@ -5,7 +5,6 @@ static
 models/*.gguf
 models/mlx/
 .tools/
-staticfiles
 
 # Created by https://www.toptal.com/developers/gitignore/api/vs,pycharm+all,python,macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=vs,pycharm+all,python,macos
