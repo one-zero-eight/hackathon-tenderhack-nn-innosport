@@ -12,7 +12,21 @@ function groupLabel(date: string) {
   return value === today.toDateString() ? 'Сегодня' : value === yesterday.toDateString() ? 'Вчера' : 'Ранее'
 }
 
-export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { chats: Chat[]; activeId: string; onSelect: (id: string) => void; onCreate: () => void }) {
+export default function ChatSidebar({
+  chats,
+  activeId,
+  loading = false,
+  error = null,
+  onSelect,
+  onCreate,
+}: {
+  chats: Chat[]
+  activeId: string
+  loading?: boolean
+  error?: string | null
+  onSelect: (id: string) => void
+  onCreate: () => void
+}) {
   const [search, setSearch] = useState('')
   const searchId = useId()
   const filtered = [...chats].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).filter((chat) => chat.title.toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru')))
@@ -50,7 +64,11 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
                     <LuMessageSquare className="text-foreground/40 size-4 shrink-0" />
                     <span className="min-w-0">
                       <span className="block truncate">{chat.title}</span>
-                      {chat.status === 'closed' && <span className="text-foreground/45 text-ui-small mt-1 block">Завершено</span>}
+                      {chat.status === 'closed' ? (
+                        <span className="text-foreground/45 text-ui-small mt-1 block">Завершено</span>
+                      ) : chat.preview ? (
+                        <span className="text-foreground/45 text-ui-small mt-1 block truncate">{chat.preview}</span>
+                      ) : null}
                     </span>
                   </button>
                 ))}
@@ -58,7 +76,9 @@ export default function ChatSidebar({ chats, activeId, onSelect, onCreate }: { c
             )
           )
         })}
-        {!filtered.length && <p className="text-foreground/50 text-ui-body px-3">Обращения не найдены</p>}
+        {loading && !filtered.length && <p className="text-foreground/50 text-ui-body px-3">Загружаем обращения…</p>}
+        {error && <p className="text-error text-ui-body px-3">{error}</p>}
+        {!loading && !filtered.length && <p className="text-foreground/50 text-ui-body px-3">Обращения не найдены</p>}
       </nav>
       <div className="border-border mx-4 border-t py-5">
         <p className="text-ui-title font-semibold tracking-tight">Техподдержка</p>

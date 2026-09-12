@@ -182,6 +182,23 @@ test('only explicit nonempty assistant answers qualify, not legacy text or direc
   assert.equal(isChatReply({ content: 'x', kind: 'unknown' }), false)
 })
 
+test('backend-offered specialist is contactable without three clarifications', () => {
+  const chat = { ...createChat('offer', now), offerSpecialist: true }
+  assert.equal(canContactSpecialist(chat), true)
+  assert.equal(canContactSpecialist({ ...chat, status: 'closed', closedAt: now }), false)
+  const exchanged = applyExchange(createChat('closed-by-api', now), user('m1'), { content: 'Обращение завершено.', kind: 'notice', closed: true, dialogId: '64b7f2c1a1b2c3d4e5f60789' })
+  assert.equal(exchanged.status, 'closed')
+  assert.equal(exchanged.closedAt, now)
+  assert.equal(exchanged.id, 'closed-by-api')
+  const offered = applyExchange(createChat('offer-reply', now), user('m1'), { content: 'Выберите специалиста', kind: 'notice', offerSpecialist: true })
+  assert.equal(offered.offerSpecialist, true)
+  assert.equal(canContactSpecialist(offered), true)
+  const handedOff = applySpecialistHandoff(offered, { requestId: 'dialog-1', simulated: false, closed: true, line: 'L1', specialistType: 'первой линии поддержки (L1)' }, 'handoff', now)
+  assert.equal(handedOff.status, 'closed')
+  assert.equal(handedOff.closedAt, now)
+  assert.equal(handedOff.handoff?.simulated, false)
+})
+
 test('specialist eligibility counts unique committed clarifications and requires open chat', () => {
   let chat = createChat('count', now)
   for (let index = 1; index <= 2; index += 1) {

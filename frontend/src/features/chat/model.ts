@@ -1,7 +1,7 @@
 import type { Chat, ChatMessage, ChatMessageKind, ChatReply, ClarificationAnswer, ClarificationRequest, FeedbackRating, SpecialistResponse } from './types.ts'
 
 // Keep the original key so valid v1 local history is migrated in place.
-// Neither conversations nor feedback are submitted to a backend by persistence.
+// Feedback stays local. Conversation turns are sent to the dialog API.
 export const CHAT_STORAGE_KEY = 'support.chat.v1'
 export const CHAT_STORAGE_VERSION = 2
 
@@ -26,7 +26,7 @@ export function canFeedback(chat: Chat): boolean {
 }
 
 export function canContactSpecialist(chat: Chat): boolean {
-  return chat.status === 'open' && !chat.handoff && clarificationCount(chat) >= 3
+  return chat.status === 'open' && !chat.handoff && (clarificationCount(chat) >= 3 || Boolean(chat.offerSpecialist))
 }
 
 export function closeChat(chat: Chat, noticeId: string, now: string): Chat {
@@ -51,14 +51,16 @@ export function reopenChat(chat: Chat, noticeId: string, now: string): Chat {
 export function applySpecialistHandoff(chat: Chat, response: SpecialistResponse, messageId: string, now: string): Chat {
   if (!canContactSpecialist(chat) || !isSpecialistResponse(response)) return chat
   const specialistType = response.specialistType?.trim()
-  return {
-    ...chat, updatedAt: now,
+  const next: Chat = {
+    ...chat, updatedAt: now, offerSpecialist: false,
     handoff: { requestId: response.requestId, simulated: response.simulated, ...(specialistType ? { specialistType } : {}), createdAt: now },
     messages: [...chat.messages, {
       id: messageId, role: 'assistant', kind: 'handoff', createdAt: now,
       content: specialistType ? `Специалист по ${specialistType} скоро свяжется с Вами` : 'Специалист службы поддержки скоро свяжется с Вами',
     }],
   }
+  if (!response.closed) return next
+  return { ...next, status: 'closed', closedAt: now }
 }
 
 export function submitFeedback(chat: Chat, rating: FeedbackRating, comment: string, now: string): Chat {
@@ -101,12 +103,15 @@ export function applyExchange(chat: Chat, userMessage: ChatMessage, reply: ChatR
   }
   const firstMessage = !chat.messages.some((message) => message.role === 'user')
   const title = userMessage.content.trim().replace(/\s+/g, ' ')
-  return {
+  const next: Chat = {
     ...chat,
     title: firstMessage ? title.slice(0, 64) || chat.title : chat.title,
     updatedAt: userMessage.createdAt,
     messages: [...chat.messages, userMessage, assistantMessage],
+    offerSpecialist: Boolean(reply.offerSpecialist),
   }
+  if (!reply.closed) return next
+  return { ...next, status: 'closed', closedAt: userMessage.createdAt }
 }
 
 /** Render human-readable labels, never implementation option IDs. */
@@ -153,11 +158,26 @@ function isFeedbackRating(value: unknown): value is FeedbackRating {
 }
 
 export function isSpecialistResponse(value: unknown): value is SpecialistResponse {
-  return isRecord(value) && isNonemptyString(value.requestId) && typeof value.simulated === 'boolean' && (value.specialistType === undefined || typeof value.specialistType === 'string')
+  return (
+    isRecord(value) &&
+    isNonemptyString(value.requestId) &&
+    typeof value.simulated === 'boolean' &&
+    (value.specialistType === undefined || typeof value.specialistType === 'string') &&
+    (value.closed === undefined || typeof value.closed === 'boolean') &&
+    (value.line === undefined || value.line === 'L1' || value.line === 'L2')
+  )
 }
 
 export function isChatReply(value: unknown): value is ChatReply {
-  return isRecord(value) && typeof value.content === 'string' && (value.kind === undefined || isMessageKind(value.kind)) && (value.clarification === undefined || isClarificationRequest(value.clarification))
+  return (
+    isRecord(value) &&
+    typeof value.content === 'string' &&
+    (value.kind === undefined || isMessageKind(value.kind)) &&
+    (value.clarification === undefined || isClarificationRequest(value.clarification)) &&
+    (value.closed === undefined || typeof value.closed === 'boolean') &&
+    (value.offerSpecialist === undefined || typeof value.offerSpecialist === 'boolean') &&
+    (value.dialogId === undefined || isNonemptyString(value.dialogId))
+  )
 }
 
 function isMessage(value: unknown): value is ChatMessage {
@@ -178,6 +198,7 @@ function migrateChat(value: unknown, version: number): Chat | null {
   const status = version === 1 && value.status === undefined ? 'open' : value.status
   const feedbackDismissed = version === 1 && value.feedbackDismissed === undefined ? false : value.feedbackDismissed
   if ((status !== 'open' && status !== 'closed') || typeof feedbackDismissed !== 'boolean') return null
+  if (value.offerSpecialist !== undefined && typeof value.offerSpecialist !== 'boolean') return null
   if (value.closedAt !== undefined && !isTimestamp(value.closedAt)) return null
   if (status === 'closed' && !isTimestamp(value.closedAt)) return null
   if (status === 'open' && value.closedAt !== undefined) return null
@@ -195,6 +216,8 @@ function migrateChat(value: unknown, version: number): Chat | null {
     ...(status === 'closed' ? { closedAt: value.closedAt as string } : {}),
     ...(handoff ? { handoff: { requestId: handoff.requestId as string, simulated: handoff.simulated as boolean, ...(handoff.specialistType !== undefined ? { specialistType: handoff.specialistType as string } : {}), createdAt: handoff.createdAt as string } } : {}),
     ...(feedback ? { feedback: { rating: feedback.rating as FeedbackRating, comment: feedback.rating === 'complete' ? '' : feedback.comment as string, submittedAt: feedback.submittedAt as string } } : {}),
+    ...(value.offerSpecialist ? { offerSpecialist: true } : {}),
+    ...(typeof value.preview === 'string' && value.preview ? { preview: value.preview } : {}),
   }
 }
 

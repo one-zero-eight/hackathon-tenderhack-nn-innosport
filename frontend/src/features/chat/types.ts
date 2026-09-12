@@ -23,6 +23,8 @@ export interface SpecialistResponse {
   specialistType?: string
   requestId: string
   simulated: boolean
+  closed?: boolean
+  line?: 'L1' | 'L2'
 }
 
 export interface ChatHandoff extends SpecialistResponse {
@@ -49,6 +51,7 @@ export interface ChatMessage {
 export interface Chat {
   id: string
   title: string
+  preview?: string
   updatedAt: string
   messages: ChatMessage[]
   status: 'open' | 'closed'
@@ -56,16 +59,20 @@ export interface Chat {
   handoff?: ChatHandoff
   feedback?: ChatFeedback
   feedbackDismissed: boolean
+  offerSpecialist?: boolean
 }
 
 export interface ChatReply {
   content: string
   kind?: ChatMessageKind
   clarification?: ClarificationRequest
+  closed?: boolean
+  offerSpecialist?: boolean
+  dialogId?: string
 }
 
-// Implement this frontend boundary with the real $api once its contract is available.
 export interface ChatTransport {
-  send: (messages: readonly ChatMessage[], signal: AbortSignal) => Promise<ChatReply>
+  create?: (signal: AbortSignal) => Promise<{ id: string }>
+  send: (messages: readonly ChatMessage[], signal: AbortSignal, chatId?: string) => Promise<ChatReply>
   requestSpecialist?: (chat: Chat, signal: AbortSignal) => Promise<SpecialistResponse>
 }

@@ -26,7 +26,8 @@ pnpm install
 pnpm dev
 ```
 
-The development server uses Vite's default address at `http://localhost:5173`.
+The development server uses Vite's default address at `http://localhost:5173`
+and proxies `/api/*` to the backend at `http://localhost:8000`.
 
 ## Production build
 
@@ -46,10 +47,19 @@ ThemeToggle and Tailwind theme tokens. It includes chat history/search, an in-ch
 clarification form, message navigation, and a specialist contact action after
 three successfully submitted clarification replies in the current chat.
 
-**The current application uses a clearly labelled local demo, not an LLM.** The
-scripted transport asks three clarification questions and gives a sample answer.
-Specialist handoff is simulated and labelled as such next to its confirmation;
-no real specialist request is sent. No backend endpoints have been added or assumed.
+The chat UI talks to the backend dialog API through the typed `$api` client
+(same OpenAPI + React Query convention as
+[hackathon-tenderhack-perm-innohassle](https://github.com/one-zero-eight/hackathon-tenderhack-perm-innohassle/tree/main/frontend/src/api)).
+Vite proxies `/api` to `http://localhost:8000` in development; production nginx
+does the same to the `backend` service.
+
+Start the API (`uv run -m src.api --reload` in `backend`, with MongoDB) before
+sending messages. The sidebar loads `GET /dialogs` (newest first). Selecting an
+appeal hydrates `GET /dialogs/{id}`. A new appeal calls `POST /dialogs`; each
+message is `POST /dialogs/{id}/messages`. Clarification options come from
+`clarification_options`. Specialist contact calls `POST /dialogs/{id}/escalate`
+and is also offered when the backend leaves the dialog open with
+`status: escalate`.
 
 Clarification questions remain visible after they are answered. An appeal can be
 closed and reopened without losing history. Closed appeals reject new messages
@@ -61,8 +71,10 @@ Feedback is local-only, including for closed appeals. Closing does not cancel an
 existing specialist handoff.
 
 - UI: `frontend/src/components/chat/`
+- Typed OpenAPI client: `frontend/src/api/` (`pnpm gen:api` refreshes `types.ts`)
+- API transport: `frontend/src/features/chat/api-transport.ts`
 - Typed frontend transport boundary: `frontend/src/features/chat/types.ts`
-- Demo transport: `frontend/src/features/chat/demo-transport.ts`
+- Demo transport (tests only): `frontend/src/features/chat/demo-transport.ts`
 - State and storage: `frontend/src/features/chat/useChat.ts`
 
 Chat history is saved under `support.chat.v1` in browser localStorage. Do not
@@ -71,10 +83,12 @@ per chat. Storage failures fall back to in-memory operation. The stored payload
 is now version 2; valid version 1 conversations are migrated in place as open
 appeals. Legacy untyped bot messages are not assumed to be substantive answers.
 
-To integrate a real service, implement `ChatTransport` and pass it to `useChat`.
-Use the `$api` convention below, and map structured clarification data rather than
-matching phrases in generated text. Update the demo labels and specialist action
-only after their real service contracts are connected.
+Regenerate API types from a running backend:
+
+```bash
+cd frontend
+pnpm gen:api
+```
 
 Run state tests (Node 22.18+ or a newer version supporting native TypeScript stripping):
 
@@ -95,8 +109,7 @@ $api.queryOptions(method, path, init, options)
 ```
 
 Use lowercase HTTP methods and pass request parameters through the typed
-OpenAPI `init` object. The API base URL and endpoint schema will be configured
-when the backend specification is available.
+OpenAPI `init` object. The default base URL is `/api` (`VITE_API_URL` overrides it).
 
 ## Team
 

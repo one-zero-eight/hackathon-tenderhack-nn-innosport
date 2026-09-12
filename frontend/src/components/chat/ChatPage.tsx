@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { LuArrowDown, LuPanelLeft, LuSparkles, LuLoaderCircle } from 'react-icons/lu'
 import Button from '@/components/ui/Button'
 import Drawer from '@/components/ui/Drawer'
+import { $api } from '@/api'
+import { isBackendDialogId, useApiTransport } from '@/features/chat/api-transport'
 import { useChat } from '@/features/chat/useChat'
 import ChatSidebar from './ChatSidebar'
 import ChatOutline from './ChatOutline'
@@ -12,7 +14,15 @@ import BotFeedbackCard from './BotFeedbackCard'
 import ChatStatusActions from './ChatStatusActions'
 
 export default function ChatPage() {
-  const chat = useChat()
+  const transport = useApiTransport()
+  const chat = useChat(transport)
+  const { data: listed, isLoading: listLoading, isError: listError } = $api.useQuery('get', '/dialogs', { params: { query: { limit: 100 } } })
+  const { data: dialog } = $api.useQuery(
+    'get',
+    '/dialogs/{dialog_id}',
+    { params: { path: { dialog_id: chat.activeChatId } } },
+    { enabled: isBackendDialogId(chat.activeChatId) },
+  )
   const [leftOpen, setLeftOpen] = useState(false)
   const [activeMessage, setActiveMessage] = useState('')
   const [nearBottom, setNearBottom] = useState(true)
@@ -21,6 +31,14 @@ export default function ChatPage() {
   const previousChat = useRef(chat.activeChatId)
   const messages = chat.activeChat.messages
   const closed = chat.activeChat.status === 'closed'
+
+  useEffect(() => {
+    if (listed) chat.syncList(listed)
+  }, [listed, chat.syncList])
+
+  useEffect(() => {
+    if (dialog) chat.syncDialog(dialog)
+  }, [dialog, chat.syncDialog])
 
   useEffect(() => {
     const container = scrollRef.current
@@ -62,12 +80,14 @@ export default function ChatPage() {
     <ChatSidebar
       chats={chat.chats}
       activeId={chat.activeChatId}
+      loading={listLoading}
+      error={listError ? 'Не удалось загрузить обращения с сервера.' : null}
       onSelect={(id) => {
         chat.selectChat(id)
         setLeftOpen(false)
       }}
       onCreate={() => {
-        chat.createChat()
+        void chat.createChat()
         setLeftOpen(false)
       }}
     />
@@ -179,7 +199,7 @@ export default function ChatPage() {
                   onClose={chat.closeChat}
                   onReopen={chat.reopenChat}
                 />
-                {!closed && !chat.activeChat.handoff && chat.clarificationCount >= 3 && <SpecialistContact busy={chat.busy} onContact={chat.contactSpecialist} />}
+                {!closed && !chat.activeChat.handoff && chat.canContactSpecialist && <SpecialistContact busy={chat.busy} onContact={chat.contactSpecialist} />}
                 {!closed && <ChatComposer draft={chat.draft} onDraft={chat.setDraft} onSend={chat.send} busy={chat.busy} awaitingClarification={!!chat.pendingClarification} />}
               </div>
             </div>
