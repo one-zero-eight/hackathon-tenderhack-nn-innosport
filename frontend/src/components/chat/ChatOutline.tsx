@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import type { ChatMessage } from '@/features/chat/types'
 
 export default function ChatOutline({ messages, activeId, onNavigate }: { messages: ChatMessage[]; activeId: string; onNavigate: (id: string) => void }) {
-  const [preview, setPreview] = useState<{ id: string; top: number } | null>(null)
+  const [preview, setPreview] = useState<{ id: string; top: number; right: number } | null>(null)
   const tooltipId = useId()
   const questions = messages.flatMap((message, index) => {
     if (message.role !== 'user') return []
@@ -14,7 +14,11 @@ export default function ChatOutline({ messages, activeId, onNavigate }: { messag
   function showPreview(id: string, element: HTMLElement) {
     const rect = element.getBoundingClientRect()
     // Reserve the tooltip's maximum height plus a 16px viewport margin.
-    setPreview({ id, top: Math.max(16, Math.min(rect.top + rect.height / 2 - 64, window.innerHeight - 144)) })
+    setPreview({
+      id,
+      top: Math.max(16, Math.min(rect.top + rect.height / 2 - 64, window.innerHeight - 144)),
+      right: window.innerWidth - rect.left + 12,
+    })
   }
 
   if (!questions.length) return null
@@ -61,8 +65,8 @@ export default function ChatOutline({ messages, activeId, onNavigate }: { messag
         <div
           id={tooltipId}
           role="tooltip"
-          style={{ top: preview.top }}
-          className="border-border bg-surface-2 pointer-events-none fixed right-20 max-h-[min(8rem,calc(100dvh-2rem))] w-80 max-w-[calc(100vw-6rem)] overflow-hidden rounded-xl border px-4 py-3 text-left shadow-xl"
+          style={{ top: preview.top, right: preview.right }}
+          className="border-border bg-surface-2 pointer-events-none fixed max-h-[min(8rem,calc(100dvh-2rem))] w-80 max-w-[calc(100vw-6rem)] overflow-hidden rounded-xl border px-4 py-3 text-left shadow-xl"
         >
           <p className="text-ui-body truncate font-medium">{visibleQuestion.message.content}</p>
           {visibleQuestion.response && <p className="text-foreground/45 text-ui-small mt-1 line-clamp-2">{visibleQuestion.response.content}</p>}

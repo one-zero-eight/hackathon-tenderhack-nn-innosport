@@ -15,20 +15,20 @@ export default function ClarificationCard({
   answered: boolean
   busy: boolean
   closed?: boolean
-  onAnswer: (request: ClarificationRequest, answer: ClarificationAnswer) => Promise<boolean>
+  onAnswer?: (request: ClarificationRequest, answer: ClarificationAnswer) => Promise<boolean>
 }) {
   const [selected, setSelected] = useState<string[]>([])
   const [otherSelected, setOtherSelected] = useState(false)
   const [other, setOther] = useState('')
   const id = useId()
-  if (answered || closed)
+  if (answered || closed || !onAnswer)
     return (
       <section className="border-border bg-surface-2 text-ui-body mt-4 space-y-2 rounded-xl border px-4 py-3">
         <h3 className="text-foreground/50 text-ui-small font-medium">Уточнение</h3>
         <p className="leading-relaxed break-words whitespace-pre-wrap">{request.question}</p>
         <p className="text-foreground/60 text-ui-small flex items-center gap-2">
           {answered && <LuCheck className="text-success size-4" />}
-          {answered ? 'Ответ получен' : 'Обращение закрыто. Откройте его, чтобы ответить на уточнение.'}
+          {answered ? 'Ответ получен' : closed ? 'Обращение закрыто. Откройте его, чтобы ответить на уточнение.' : 'Ответ ещё не получен'}
         </p>
       </section>
     )

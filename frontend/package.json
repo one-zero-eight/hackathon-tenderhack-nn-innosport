@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/features/chat/*.test.ts",
+    "test": "node --experimental-strip-types --test src/features/chat/*.test.ts src/features/admin/*.test.ts",
     "preview": "vite preview",
     "prettify": "prettier . -w -l",
     "gen:api": "node scripts/gen-api.mjs"
