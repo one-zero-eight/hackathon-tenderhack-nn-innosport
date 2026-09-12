@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from src.modules.dialog.schemas import Clarification, DialogStatus, SupportLine, ToolCall
+from src.modules.dialog.schemas import Clarification, DialogFeedback, DialogStatus, SupportLine, ToolCall
 from src.pydantic_base import BaseSchema
 
 
@@ -33,6 +33,7 @@ class ConversationState(BaseSchema):
     status: DialogStatus | None = None
     line: SupportLine | None = None
     reason: str | None = None
+    feedback: DialogFeedback | None = None
     citations: list[StoredCitation] = Field(default_factory=list)
     messages: list[StoredMessage] = Field(default_factory=list)
     updated_at: dtm.datetime = Field(default_factory=utcnow)
@@ -73,6 +74,9 @@ class MemoryConversationStore:
         return items[:limit]
 
     async def save(self, state: ConversationState) -> None:
+        current = self._items.get(state.id)
+        if current is None or current.revision != state.revision:
+            raise ConversationConflictError(state.id)
         state.updated_at = utcnow()
         state.revision += 1
         self._items[state.id] = state

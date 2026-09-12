@@ -17,6 +17,8 @@ from src.modules.dialog.schemas import (
     Citation,
     Clarification,
     DialogDeleteResult,
+    DialogFeedback,
+    DialogFeedbackCreate,
     DialogListItem,
     DialogMessage,
     DialogResponse,
@@ -33,6 +35,7 @@ from src.modules.dialog.store import (
     ConversationStore,
     StoredCitation,
     StoredMessage,
+    utcnow,
 )
 from src.modules.dialog.texts import (
     ABUSE_REPLY,
@@ -73,6 +76,13 @@ class DialogService:
 
     async def list_dialogs(self, *, limit: int = 100) -> list[DialogListItem]:
         return [self._list_item(state) for state in await self.store.list(limit=limit)]
+
+    async def submit_feedback(self, dialog_id: str, payload: DialogFeedbackCreate) -> DialogFeedback:
+        state = (await self._require(dialog_id)).model_copy(deep=True)
+        feedback = DialogFeedback(**payload.model_dump(), submitted_at=utcnow())
+        state.feedback = feedback
+        await self._save(state)
+        return feedback
 
     async def delete(self, dialog_id: str) -> DialogDeleteResult:
         if not await self.store.delete(dialog_id):
@@ -401,6 +411,7 @@ class DialogService:
             citations=citations or [],
             closed=state.closed,
             reason=state.reason,
+            feedback=state.feedback,
             updated_at=state.updated_at,
         )
 
@@ -415,6 +426,7 @@ class DialogService:
             line=state.line,
             closed=state.closed,
             reason=state.reason,
+            feedback=state.feedback,
             updated_at=state.updated_at,
         )
 

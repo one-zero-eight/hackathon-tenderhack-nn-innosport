@@ -5,7 +5,7 @@ from typing import ClassVar
 from beanie import PydanticObjectId
 from pydantic import Field
 
-from src.modules.dialog.schemas import Clarification, DialogStatus, SupportLine, ToolCall
+from src.modules.dialog.schemas import Clarification, DialogFeedback, DialogStatus, SupportLine, ToolCall
 from src.modules.dialog.store import (
     ConversationConflictError,
     ConversationState,
@@ -37,6 +37,7 @@ class ConversationSchema(BaseSchema):
     status: DialogStatus | None = None
     line: SupportLine | None = None
     reason: str | None = None
+    feedback: DialogFeedback | None = None
     citations: list[ConversationCitationSchema] = Field(default_factory=list)
     messages: list[ConversationMessageSchema] = Field(default_factory=list)
     updated_at: dtm.datetime | None = None
@@ -73,6 +74,7 @@ def document_to_state(document: Conversation) -> ConversationState:
         status=document.status,
         line=document.line,
         reason=document.reason,
+        feedback=document.feedback,
         citations=[
             StoredCitation(
                 document=item.document,
@@ -135,6 +137,7 @@ class MongoConversationStore:
                     "status": state.status,
                     "line": state.line,
                     "reason": state.reason,
+                    "feedback": state.feedback.model_dump(mode="python") if state.feedback else None,
                     "updated_at": state.updated_at,
                     "citations": [
                         ConversationCitationSchema(

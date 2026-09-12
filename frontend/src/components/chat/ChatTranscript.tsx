@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
-import { LuCheck, LuChevronDown, LuCircleAlert, LuClock, LuLoaderCircle, LuSparkles, LuWrench } from 'react-icons/lu'
+import { LuCheck, LuChevronDown, LuCircleAlert, LuClock, LuFileText, LuLoaderCircle, LuSparkles, LuWrench } from 'react-icons/lu'
 import type { Chat, ChatMessage, ChatToolStatus, ClarificationRequest } from '@/features/chat/types'
 import { pendingClarificationMessageId } from '@/features/chat/model'
 import ClarificationCard from './ClarificationCard'
@@ -89,7 +89,7 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
   const previousUserMessage = useRef<string | undefined>(undefined)
   const messages = chat.messages
   const pendingClarificationId = pendingClarificationMessageId(chat)
-  const lastConfirmedUserIndex = messages.reduce((last, message, index) => message.role === 'user' && !message.pending ? index : last, -1)
+  const lastUserIndex = messages.reduce((last, message, index) => message.role === 'user' ? index : last, -1)
   const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.id
   const streamingMessage = messages.find((message) => message.role === 'assistant' && message.pending)
   const latestContent = messages.at(-1)?.content
@@ -195,7 +195,27 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                   </div>
                   {message.role === 'assistant' && Boolean(message.toolCalls?.length) && <ToolActivity message={message} />}
                   {message.role === 'assistant' ? (
-                    <MarkdownMessage content={message.content} />
+                    !message.clarification && (
+                      <>
+                        <MarkdownMessage content={message.content} />
+                        {Boolean(message.citations?.length) && (
+                          <aside aria-label="Источники" className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                            <p className="mb-2 font-medium">Источники</p>
+                            <ul className="space-y-2">
+                              {message.citations?.map((citation, citationIndex) => (
+                                <li key={`${citation.path}:${citation.section}:${citationIndex}`} className="flex min-w-0 items-start gap-2 leading-5">
+                                  <LuFileText aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 opacity-70" />
+                                  <span className="min-w-0 break-words">
+                                    <span>{citation.document.trim() || citation.path}</span>
+                                    {citation.section.trim() && <span className="mt-0.5 block text-gray-500 dark:text-gray-400">{citation.section}</span>}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </aside>
+                        )}
+                      </>
+                    )
                   ) : (
                     <div className="text-ui-body bg-surface-2 rounded-2xl rounded-tr-md px-5 py-3 leading-7 break-words whitespace-pre-wrap">{message.content}</div>
                   )}
@@ -209,7 +229,8 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                     <ClarificationCard
                       key={message.clarification.id}
                       request={message.clarification}
-                      answered={index < lastConfirmedUserIndex}
+                      answered={index < lastUserIndex}
+                      answer={messages.slice(index + 1).find((item) => item.role === 'user')?.content}
                       busy={busy}
                       closed={chat.status === 'closed'}
                       onAnswer={message.id === pendingClarificationId ? onAnswerClarification : undefined}

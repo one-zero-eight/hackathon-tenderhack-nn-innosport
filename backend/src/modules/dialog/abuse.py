@@ -51,13 +51,8 @@ def load_lexicon(path: Path | None = None) -> tuple[frozenset[str], frozenset[st
 def _stem_hits(token_stem: str, stems: frozenset[str]) -> bool:
     if len(token_stem) < MIN_STEM_LEN:
         return False
-    if token_stem in stems:
-        return True
-    for stem in stems:
-        longer, shorter = (stem, token_stem) if len(stem) >= len(token_stem) else (token_stem, stem)
-        if longer.startswith(shorter) and len(longer) - len(shorter) <= 2:
-            return True
-    return False
+    # Shared prefixes are not word matches: «минуту» must not match «мину».
+    return token_stem in stems
 
 
 def is_abuse(text: str, *, lexicon_path: Path | None = None) -> bool:

@@ -1,7 +1,7 @@
 import type { Chat, ChatMessage, ChatMessageKind, ChatReply, ClarificationRequest, FeedbackRating, SpecialistResponse, ToolCall } from './types.ts'
 
 // Keep the original key so valid v1 local history is migrated in place.
-// Feedback stays local. Conversation turns are sent to the dialog API.
+// Conversation turns and feedback are synchronized with the dialog API.
 export const CHAT_STORAGE_KEY = 'support.chat.v1'
 export const CHAT_STORAGE_VERSION = 2
 
@@ -76,9 +76,10 @@ export function applySpecialistHandoff(chat: Chat, response: SpecialistResponse,
   return { ...next, status: 'closed', closedAt: now }
 }
 
-export function submitFeedback(chat: Chat, rating: FeedbackRating, comment: string, now: string): Chat {
-  if (!canFeedback(chat) || !isFeedbackRating(rating) || typeof comment !== 'string') return chat
-  return { ...chat, feedback: { rating, comment: rating === 'complete' ? '' : comment.trim(), submittedAt: now }, updatedAt: now }
+/** Apply only feedback confirmed by the transport, preserving the server timestamp. */
+export function submitFeedback(chat: Chat, rating: FeedbackRating, comment: string, submittedAt: string): Chat {
+  if (!canFeedback(chat) || !isFeedbackRating(rating) || typeof comment !== 'string' || !isTimestamp(submittedAt)) return chat
+  return { ...chat, feedback: { rating, comment, submittedAt }, updatedAt: submittedAt }
 }
 
 export function dismissFeedback(chat: Chat): Chat {
@@ -97,6 +98,7 @@ export function applyExchange(chat: Chat, userMessage: ChatMessage, reply: ChatR
     kind: reply.kind ?? 'notice',
     createdAt: userMessage.createdAt,
     ...(reply.toolCalls?.length ? { toolCalls: reply.toolCalls } : {}),
+    ...(reply.citations?.length ? { citations: reply.citations } : {}),
     ...(reply.clarification ? { clarification: reply.clarification } : {}),
   }
   const firstMessage = !chat.messages.some((message) => message.role === 'user')
@@ -171,6 +173,7 @@ export function isChatReply(value: unknown): value is ChatReply {
     isRecord(value) &&
     typeof value.content === 'string' &&
     (value.toolCalls === undefined || (Array.isArray(value.toolCalls) && value.toolCalls.every(isToolCall))) &&
+    (value.citations === undefined || (Array.isArray(value.citations) && value.citations.every((citation: unknown) => isRecord(citation) && typeof citation.document === 'string' && typeof citation.section === 'string' && typeof citation.path === 'string'))) &&
     (value.kind === undefined || isMessageKind(value.kind)) &&
     (value.closed === undefined || typeof value.closed === 'boolean') &&
     (value.offerSpecialist === undefined || typeof value.offerSpecialist === 'boolean') &&
@@ -186,6 +189,7 @@ function isStoredMessage(value: unknown): value is Omit<ChatMessage, 'kind'> & {
     (value.role === 'user' || value.role === 'assistant') &&
     typeof value.content === 'string' &&
     (value.toolCalls === undefined || (Array.isArray(value.toolCalls) && value.toolCalls.every(isToolCall))) &&
+    (value.citations === undefined || (Array.isArray(value.citations) && value.citations.every((citation: unknown) => isRecord(citation) && typeof citation.document === 'string' && typeof citation.section === 'string' && typeof citation.path === 'string'))) &&
     (value.kind === undefined || value.kind === 'clarification' || isMessageKind(value.kind)) &&
     isTimestamp(value.createdAt) &&
     (value.clarification === undefined || isClarificationRequest(value.clarification)) &&
@@ -223,10 +227,11 @@ function migrateChat(value: unknown, version: number): Chat | null {
       ...(message.clarification ? { clarification: message.clarification } : {}),
       ...(message.clarificationId ? { clarificationId: message.clarificationId } : {}),
       ...(message.toolCalls?.length ? { toolCalls: message.toolCalls } : {}),
+      ...(message.citations?.length ? { citations: message.citations } : {}),
     })),
     ...(status === 'closed' ? { closedAt: value.closedAt as string } : {}),
     ...(handoff ? { handoff: { requestId: handoff.requestId as string, simulated: handoff.simulated as boolean, ...(handoff.line ? { line: handoff.line } : {}), ...(handoff.specialistType !== undefined ? { specialistType: handoff.specialistType as string } : {}), createdAt: handoff.createdAt as string } } : {}),
-    ...(feedback ? { feedback: { rating: feedback.rating as FeedbackRating, comment: feedback.rating === 'complete' ? '' : feedback.comment as string, submittedAt: feedback.submittedAt as string } } : {}),
+    ...(feedback ? { feedback: { rating: feedback.rating as FeedbackRating, comment: feedback.comment as string, submittedAt: feedback.submittedAt as string } } : {}),
     ...(value.offerSpecialist ? { offerSpecialist: true } : {}),
     ...(typeof value.preview === 'string' && value.preview ? { preview: value.preview } : {}),
   }

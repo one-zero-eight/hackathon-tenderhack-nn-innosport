@@ -41,6 +41,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dialogs/{dialog_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Submit Feedback */
+        put: operations["submit_feedback_dialogs__dialog_id__feedback_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dialogs/{dialog_id}/messages": {
         parameters: {
             query?: never;
@@ -95,10 +112,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/audits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Audit
+         * @description Analyze a supplied sample of rated dialogs without truncating their transcripts.
+         */
+        post: operations["create_audit_admin_audits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AuditDialog */
+        AuditDialog: {
+            /** Id */
+            id: string;
+            /** Messages */
+            messages: components["schemas"]["AuditMessage"][];
+            feedback: components["schemas"]["AuditFeedback"];
+        };
+        /** AuditFeedback */
+        AuditFeedback: {
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "complete" | "partial" | "irrelevant";
+            /**
+             * Comment
+             * @default
+             */
+            comment: string;
+        };
+        /** AuditMessage */
+        AuditMessage: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Content */
+            content: string;
+        };
+        /** AuditRatings */
+        AuditRatings: {
+            /** Complete */
+            complete: number;
+            /** Partial */
+            partial: number;
+            /** Irrelevant */
+            irrelevant: number;
+        };
+        /** AuditRequest */
+        AuditRequest: {
+            /** Dialogs */
+            dialogs: components["schemas"]["AuditDialog"][];
+        };
+        /** AuditResponse */
+        AuditResponse: {
+            /** Analysis */
+            analysis: string;
+            /** Dialog Ids */
+            dialog_ids: string[];
+            ratings: components["schemas"]["AuditRatings"];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+        };
         /** Citation */
         Citation: {
             /** Document */
@@ -122,6 +217,37 @@ export interface components {
             /** Deleted */
             deleted: number;
         };
+        /** DialogFeedback */
+        DialogFeedback: {
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "complete" | "partial" | "irrelevant";
+            /**
+             * Comment
+             * @default
+             */
+            comment: string;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+        };
+        /** DialogFeedbackCreate */
+        DialogFeedbackCreate: {
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "complete" | "partial" | "irrelevant";
+            /**
+             * Comment
+             * @default
+             */
+            comment: string;
+        };
         /** DialogListItem */
         DialogListItem: {
             /** Id */
@@ -142,6 +268,7 @@ export interface components {
             closed: boolean;
             /** Reason */
             reason?: string | null;
+            feedback?: components["schemas"]["DialogFeedback"] | null;
             /**
              * Updated At
              * Format: date-time
@@ -178,6 +305,7 @@ export interface components {
             closed: boolean;
             /** Reason */
             reason?: string | null;
+            feedback?: components["schemas"]["DialogFeedback"] | null;
             /** Updated At */
             updated_at?: string | null;
         };
@@ -224,6 +352,7 @@ export interface components {
             closed: boolean;
             /** Reason */
             reason?: string | null;
+            feedback?: components["schemas"]["DialogFeedback"] | null;
             /** Updated At */
             updated_at?: string | null;
             /** Messages */
@@ -283,9 +412,17 @@ export interface components {
     headers: never;
     pathItems: never;
 }
+export type SchemaAuditDialog = components['schemas']['AuditDialog'];
+export type SchemaAuditFeedback = components['schemas']['AuditFeedback'];
+export type SchemaAuditMessage = components['schemas']['AuditMessage'];
+export type SchemaAuditRatings = components['schemas']['AuditRatings'];
+export type SchemaAuditRequest = components['schemas']['AuditRequest'];
+export type SchemaAuditResponse = components['schemas']['AuditResponse'];
 export type SchemaCitation = components['schemas']['Citation'];
 export type SchemaClarification = components['schemas']['Clarification'];
 export type SchemaDialogDeleteResult = components['schemas']['DialogDeleteResult'];
+export type SchemaDialogFeedback = components['schemas']['DialogFeedback'];
+export type SchemaDialogFeedbackCreate = components['schemas']['DialogFeedbackCreate'];
 export type SchemaDialogListItem = components['schemas']['DialogListItem'];
 export type SchemaDialogMessage = components['schemas']['DialogMessage'];
 export type SchemaDialogResponse = components['schemas']['DialogResponse'];
@@ -433,6 +570,41 @@ export interface operations {
             };
         };
     };
+    submit_feedback_dialogs__dialog_id__feedback_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dialog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DialogFeedbackCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialogFeedback"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     post_message_dialogs__dialog_id__messages_post: {
         parameters: {
             query?: never;
@@ -521,6 +693,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DialogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_audit_admin_audits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditResponse"];
                 };
             };
             /** @description Validation Error */

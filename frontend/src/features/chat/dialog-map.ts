@@ -1,6 +1,6 @@
-import type { SchemaCitation, SchemaDialogListItem, SchemaDialogResponse, SchemaDialogView } from '../../api/types.ts'
+import type { SchemaDialogFeedback, SchemaDialogListItem, SchemaDialogResponse, SchemaDialogView } from '../../api/types.ts'
 import { createChat, type ChatHistory } from './model.ts'
-import type { Chat, ChatMessage, ChatReply, SpecialistResponse } from './types.ts'
+import type { Chat, ChatFeedback, ChatMessage, ChatReply, SpecialistResponse } from './types.ts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -18,13 +18,8 @@ export function isDialogPayload(value: unknown): value is SchemaDialogResponse {
   return isRecord(value) && typeof value.id === 'string' && typeof value.reply === 'string'
 }
 
-function formatCitations(citations: SchemaCitation[]): string {
-  if (!citations.length) return ''
-  const lines = citations.map((citation) => {
-    const label = [citation.document, citation.section].filter((part) => part.trim().length > 0).join(' — ')
-    return `• ${label || citation.path}`
-  })
-  return `\n\nИсточники:\n${lines.join('\n')}`
+export function mapDialogFeedback(data: SchemaDialogFeedback): ChatFeedback {
+  return { rating: data.rating, comment: data.comment ?? '', submittedAt: new Date(data.submitted_at).toISOString() }
 }
 
 export function mapDialogResponse(data: SchemaDialogResponse): ChatReply {
@@ -32,7 +27,8 @@ export function mapDialogResponse(data: SchemaDialogResponse): ChatReply {
   const closed = Boolean(data.closed)
   return {
     dialogId: data.id,
-    content: `${data.reply}${data.status === 'answered' ? formatCitations(citations) : ''}`,
+    content: data.reply,
+    ...(data.status === 'answered' && citations.length ? { citations } : {}),
     kind: closed || data.clarification ? 'notice' : 'answer',
     ...(data.clarification ? { clarification: data.clarification } : {}),
     ...(data.tool_calls?.length ? { toolCalls: data.tool_calls } : {}),
@@ -78,7 +74,7 @@ export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): C
     feedbackDismissed: existing?.feedbackDismissed ?? false,
     ...(item.preview ? { preview: item.preview } : existing?.preview ? { preview: existing.preview } : {}),
     ...(status === 'closed' ? { closedAt: existing?.closedAt ?? updatedAt } : {}),
-    ...(existing?.feedback ? { feedback: existing.feedback } : {}),
+    ...(item.feedback ? { feedback: mapDialogFeedback(item.feedback) } : {}),
     ...(item.status === 'escalate' && !item.closed ? { offerSpecialist: true } : existing?.offerSpecialist && status === 'open' ? { offerSpecialist: true } : {}),
   }
   if (existing?.handoff) chat.handoff = existing.handoff
@@ -108,6 +104,7 @@ export function chatFromDialogView(view: SchemaDialogView, existing?: Chat): Cha
       line: view.line,
       closed: Boolean(view.closed),
       reason: view.reason,
+      feedback: view.feedback,
       updated_at: updatedAt,
     },
     { ...(existing ?? createChat(view.id, updatedAt)), messages, clarification: view.clarification ?? undefined },
@@ -123,10 +120,12 @@ function mapViewMessages(view: SchemaDialogView, existing?: Chat): ChatMessage[]
     const candidate = previousMessages?.[index]
     const previous = candidate?.role === role && candidate.content === message.content ? candidate : undefined
     const isLastAssistant = role === 'assistant' && index === raw.length - 1
+    const citations = role === 'assistant' ? (isLastAssistant ? lastReply.citations : previous?.citations) : undefined
     return {
       id: previous?.id ?? `${view.id}:m${index}`,
       role,
       content: isLastAssistant ? lastReply.content : message.content,
+      ...(citations?.length ? { citations } : {}),
       createdAt: previous?.createdAt ?? toTimestamp(view.updated_at),
       ...(role === 'assistant' ? { kind: message.clarification ? 'notice' : isLastAssistant ? lastReply.kind : 'answer' } : {}),
       ...(role === 'assistant' && message.clarification ? { clarification: message.clarification } : {}),

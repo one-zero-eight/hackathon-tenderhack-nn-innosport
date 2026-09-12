@@ -1,5 +1,19 @@
 $schema: https://json-schema.org/draft-07/schema
 $defs:
+  AuditSettings:
+    additionalProperties: false
+    description: LLM output budget for administrative feedback analysis.
+    properties:
+      max_tokens:
+        default: 4096
+        description: Maximum output tokens for an audit report; independent of short
+          chat answers
+        maximum: 16384
+        minimum: 512
+        title: Max Tokens
+        type: integer
+    title: AuditSettings
+    type: object
   Environment:
     enum:
     - development
@@ -172,6 +186,9 @@ properties:
     $ref: '#/$defs/LlamaCppSettings'
     description: llama.cpp server used when model_provider is llama_cpp. Disabled
       by default.
+  audit:
+    $ref: '#/$defs/AuditSettings'
+    description: Administrative audit report generation settings
   mlx:
     $ref: '#/$defs/MlxSettings'
     description: MLX server used when model_provider is mlx. Run scripts/start_mlx_server.sh

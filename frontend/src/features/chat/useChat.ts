@@ -40,7 +40,7 @@ export interface UseChatResult {
   closeChat: () => void
   reopenChat: () => void
   contactSpecialist: () => Promise<boolean>
-  submitFeedback: (rating: FeedbackRating, comment: string) => boolean
+  submitFeedback: (rating: FeedbackRating, comment: string) => Promise<boolean>
   dismissFeedback: () => void
   canFeedback: boolean
   canContactSpecialist: boolean
@@ -300,10 +300,40 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     updateActiveChat((chat) => reopenChatModel(chat, newId(), new Date().toISOString()))
   }, [updateActiveChat])
 
-  const submitFeedback = useCallback((rating: FeedbackRating, comment: string): boolean => {
-    // This is a local history update, not an API request.
-    return updateActiveChat((chat) => submitFeedbackModel(chat, rating, comment, new Date().toISOString()))
-  }, [updateActiveChat])
+  const submitFeedback = useCallback(async (rating: FeedbackRating, comment: string): Promise<boolean> => {
+    const current = historyRef.current
+    const chat = current.chats.find((item) => item.id === current.activeChatId)
+    if (!chat || operations.current.has(chat.id) || !canFeedback(chat)) return false
+    if (!transport.submitFeedback) {
+      setErrors((errors) => ({ ...errors, [chat.id]: 'Отправка оценки недоступна: сервис не подключён.' }))
+      return false
+    }
+    const controller = new AbortController()
+    operations.current.set(chat.id, controller)
+    setBusyChats((busy) => ({ ...busy, [chat.id]: true }))
+    setErrors((errors) => ({ ...errors, [chat.id]: null }))
+    try {
+      const feedback = await transport.submitFeedback(chat.id, rating, comment.trim(), controller.signal)
+      if (!mounted.current || controller.signal.aborted) return false
+      const latest = historyRef.current
+      const target = latest.chats.find((item) => item.id === chat.id)
+      if (!target) return false
+      const next = submitFeedbackModel(target, feedback.rating, feedback.comment, feedback.submittedAt)
+      if (next === target) return false
+      commitHistory({ ...latest, chats: latest.chats.map((item) => item.id === chat.id ? next : item) })
+      return true
+    } catch {
+      if (mounted.current && !controller.signal.aborted) {
+        setErrors((errors) => ({ ...errors, [chat.id]: 'Не удалось сохранить оценку. Попробуйте ещё раз.' }))
+      }
+      return false
+    } finally {
+      if (operations.current.get(chat.id) === controller) {
+        operations.current.delete(chat.id)
+        if (mounted.current) setBusyChats((busy) => ({ ...busy, [chat.id]: false }))
+      }
+    }
+  }, [commitHistory, transport])
 
   const dismissFeedback = useCallback((): void => {
     updateActiveChat(dismissFeedbackModel)

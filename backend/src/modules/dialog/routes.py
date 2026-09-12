@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from src.api import docs
 from src.modules.dialog.schemas import (
     DialogDeleteResult,
+    DialogFeedback,
+    DialogFeedbackCreate,
     DialogListItem,
     DialogResponse,
     DialogStreamEvent,
@@ -55,6 +57,11 @@ async def delete_dialogs(service: DialogServiceDep) -> DialogDeleteResult:
 @router.get("/dialogs/{dialog_id}", response_model=DialogView)
 async def get_dialog(dialog_id: str, service: DialogServiceDep) -> DialogView:
     return await service.get(dialog_id)
+
+
+@router.put("/dialogs/{dialog_id}/feedback")
+async def submit_feedback(dialog_id: str, payload: DialogFeedbackCreate, service: DialogServiceDep) -> DialogFeedback:
+    return await service.submit_feedback(dialog_id, payload)
 
 
 @router.delete("/dialogs/{dialog_id}", response_model=DialogDeleteResult)

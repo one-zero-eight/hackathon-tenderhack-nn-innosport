@@ -21,7 +21,7 @@ export default function BotFeedbackCard({
   feedback: Chat['feedback']
   waitingForSpecialist: boolean
   busy: boolean
-  onSubmit: (rating: Rating, comment: string) => boolean
+  onSubmit: (rating: Rating, comment: string) => Promise<boolean>
   onDismiss: () => void
 }) {
   const [rating, setRating] = useState<Rating | null>(null)
@@ -51,9 +51,11 @@ export default function BotFeedbackCard({
         </div>
       </div>
       <form
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault()
-          if (rating && !busy) setError(!onSubmit(rating, rating === 'complete' ? '' : comment.trim()))
+          if (!rating || busy) return
+          setError(false)
+          setError(!(await onSubmit(rating, rating === 'complete' ? '' : comment.trim())))
         }}
       >
         <fieldset disabled={busy}>
@@ -85,7 +87,7 @@ export default function BotFeedbackCard({
               <label htmlFor={`${id}-reason`} className="text-ui-body block font-medium">
                 Почему ответ не подошёл?
               </label>
-              <Textarea id={`${id}-reason`} value={comment} onChange={(event) => setComment(event.target.value)} rows={3} maxLength={4000} placeholder="Расскажите, чего не хватило или что было не так…" aria-describedby={`${id}-optional`} />
+              <Textarea id={`${id}-reason`} value={comment} onChange={(event) => setComment(event.target.value)} rows={3} maxLength={2000} placeholder="Расскажите, чего не хватило или что было не так…" aria-describedby={`${id}-optional`} />
               <p id={`${id}-optional`} className="text-foreground/40 text-ui-small">
                 Необязательно
               </p>
@@ -100,8 +102,8 @@ export default function BotFeedbackCard({
             <Button variant="ghost" size="sm" disabled={busy} onClick={onDismiss}>
               Не сейчас
             </Button>
-            <Button type="submit" size="sm" disabled={!rating || busy}>
-              Отправить оценку
+            <Button type="submit" size="sm" disabled={!rating || busy} aria-busy={busy}>
+              {busy ? 'Сохраняем оценку…' : 'Отправить оценку'}
             </Button>
           </div>
         </fieldset>

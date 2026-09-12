@@ -1,4 +1,4 @@
-import type { SchemaSupportLine } from '../../api/types.ts'
+import type { SchemaCitation, SchemaSupportLine } from '../../api/types.ts'
 
 export interface ClarificationRequest {
   id: string
@@ -21,7 +21,6 @@ export interface ChatHandoff extends SpecialistResponse {
   createdAt: string
 }
 
-/** Feedback is persisted locally only, not submitted to a backend. */
 export interface ChatFeedback {
   rating: FeedbackRating
   comment: string
@@ -47,6 +46,7 @@ export interface ChatMessage {
   content: string
   createdAt: string
   kind?: ChatMessageKind
+  citations?: SchemaCitation[]
   toolCalls?: (ToolCall | ChatToolCall)[]
   clarification?: ClarificationRequest
   clarificationId?: string
@@ -71,6 +71,7 @@ export interface Chat {
 export interface ChatReply {
   content: string
   kind?: ChatMessageKind
+  citations?: SchemaCitation[]
   toolCalls?: ToolCall[]
   closed?: boolean
   offerSpecialist?: boolean
@@ -82,6 +83,7 @@ export interface ChatTransport {
   create?: (signal: AbortSignal) => Promise<{ id: string }>
   send: (messages: readonly ChatMessage[], signal: AbortSignal, chatId?: string, onText?: (text: string) => void, onTool?: (tool: ChatToolCall) => void) => Promise<ChatReply>
   requestSpecialist?: (chat: Chat, signal: AbortSignal) => Promise<SpecialistResponse>
+  submitFeedback?: (chatId: string, rating: FeedbackRating, comment: string, signal: AbortSignal) => Promise<ChatFeedback>
   delete?: (chatId: string, signal: AbortSignal) => Promise<void>
   deleteAll?: (signal: AbortSignal) => Promise<void>
 }

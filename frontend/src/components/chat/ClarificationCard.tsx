@@ -1,85 +1,144 @@
-import { useId, useState } from 'react'
-import { LuCheck, LuListFilter } from 'react-icons/lu'
+import { useId, useRef, useState } from 'react'
+import { LuArrowRight, LuCheck, LuLoaderCircle, LuMessageCircle, LuPencil } from 'react-icons/lu'
 import Button from '@/components/ui/Button'
 import Textarea from '@/components/ui/Textarea'
 import type { ClarificationRequest } from '@/features/chat/types'
 
-export default function ClarificationCard({
-  request,
-  answered,
-  busy,
-  closed,
-  onAnswer,
-}: {
+interface ClarificationCardProps {
   request: ClarificationRequest
   answered: boolean
+  answer?: string
   busy: boolean
   closed: boolean
   onAnswer?: (request: ClarificationRequest, content: string) => Promise<boolean>
-}) {
-  const [selected, setSelected] = useState<number | 'other' | null>(null)
-  const [other, setOther] = useState('')
+}
+
+export default function ClarificationCard({ request, answered, answer, busy, closed, onAnswer }: ClarificationCardProps) {
   const id = useId()
-  const content = selected === 'other' ? other.trim() : selected === null ? '' : request.options[selected]
+  const [selection, setSelection] = useState<number | 'other' | null>(null)
+  const [customAnswer, setCustomAnswer] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState(false)
+  const submitLock = useRef(false)
+  const locked = busy || submitting
+  const content = selection === 'other' ? customAnswer.trim() : selection === null ? '' : request.options[selection]
+  const questionId = `${id}-question`
+
+  async function submit() {
+    if (locked || submitLock.current || !content || !onAnswer) return
+    submitLock.current = true
+    setSubmitting(true)
+    setError(false)
+    try {
+      setError(!await onAnswer(request, content))
+    } catch {
+      setError(true)
+    } finally {
+      submitLock.current = false
+      setSubmitting(false)
+    }
+  }
 
   if (answered || closed || !onAnswer) {
+    const customAnswered = answered && !!answer && !request.options.includes(answer)
+
     return (
-      <section className="border-border bg-surface-2 text-ui-body mt-4 space-y-2 rounded-xl border px-4 py-3">
-        <h3 className="text-foreground/50 text-ui-small font-medium">Уточнение</h3>
-        <p className="leading-relaxed break-words whitespace-pre-wrap">{request.question}</p>
-        <ul className="space-y-2">
-          {[...request.options, 'Другое'].map((option) => (
-            <li key={option} className="border-border rounded-xl border px-3 py-2 break-words">{option}</li>
-          ))}
+      <section aria-labelledby={questionId} className={`mt-3 rounded-2xl border p-4 sm:p-5 ${answered ? 'border-success/20 bg-success/5' : 'border-border bg-surface-2'}`}>
+        {answered && (
+          <div className="text-success text-ui-small mb-2 flex items-center gap-2 font-medium">
+            <LuCheck aria-hidden="true" className="size-4 shrink-0" />
+            Ответ получен
+          </div>
+        )}
+        <h3 id={questionId} className="text-ui-body font-medium leading-relaxed break-words">{request.question}</h3>
+        <ul className="mt-4 space-y-2">
+          {[...request.options, 'Свой вариант'].map((option, index) => {
+            const other = index === request.options.length
+            const selected = answered && (other ? customAnswered : option === answer)
+            return (
+              <li key={index} className={`flex min-h-12 items-center gap-3 rounded-xl border px-4 py-3 ${selected ? 'border-success/40 bg-success/10' : 'border-border'}`}>
+                <span aria-hidden="true" className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-success bg-success text-white' : 'border-foreground/25'}`}>
+                  {selected && <LuCheck className="size-3.5" />}
+                </span>
+                <div className="text-ui-body min-w-0 flex-1 leading-relaxed break-words">
+                  <span className={selected ? 'font-medium' : undefined}>{option}</span>
+                  {selected && <span className="sr-only"> — выбранный ответ</span>}
+                  {other && customAnswered && <p className="mt-1 whitespace-pre-wrap">{answer}</p>}
+                </div>
+                {other && <LuPencil aria-hidden="true" className="text-foreground/45 size-4 shrink-0" />}
+              </li>
+            )
+          })}
         </ul>
-        <p className="text-foreground/60 text-ui-small flex items-center gap-2">
-          {answered && <LuCheck className="text-success size-4" />}
-          {answered ? 'Ответ получен' : closed ? 'Обращение закрыто. Откройте его, чтобы ответить на уточнение.' : 'Ответ ещё не получен'}
-        </p>
+        {!answered && (
+          <p className="text-foreground/60 text-ui-small mt-2">
+            {closed ? 'Обращение закрыто. Откройте его, чтобы ответить.' : 'Это уточнение больше недоступно для ответа.'}
+          </p>
+        )}
       </section>
     )
   }
 
   return (
     <form
-      onSubmit={(event) => {
-        event.preventDefault()
-        if (!busy && content) void onAnswer(request, content)
-      }}
-      className="border-border bg-surface mt-4 overflow-hidden rounded-2xl border shadow-sm"
+      aria-labelledby={questionId}
+      aria-busy={locked}
+      onSubmit={(event) => { event.preventDefault(); void submit() }}
+      className="border-primary/20 bg-surface mt-3 rounded-2xl border p-4 shadow-sm sm:p-5"
     >
-      <div className="border-border bg-surface-2/60 border-b px-5 py-4">
-        <h3 className="text-ui-title flex items-center gap-2 font-semibold">
-          <LuListFilter className="text-primary size-4" />
-          Пожалуйста, уточните запрос
-        </h3>
+      <div className="text-primary text-ui-small mb-3 flex items-center gap-2 font-medium">
+        <LuMessageCircle aria-hidden="true" className="size-4" />
+        Уточним одну деталь
       </div>
-      <fieldset disabled={busy} className="space-y-3 p-5">
-        <legend className="sr-only">{request.question}</legend>
-        <p className="text-ui-body leading-relaxed">{request.question}</p>
-        <p className="text-foreground/45 text-ui-small">Выберите один вариант или напишите свой</p>
-        <div className="space-y-2">
-          {request.options.map((option, index) => (
-            <label key={index} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${selected === index ? 'border-primary bg-primary/5' : 'border-border hover:bg-surface-2'}`}>
-              <input type="radio" name={id} value={option} checked={selected === index} onChange={() => setSelected(index)} className="accent-primary mt-0.5 size-4 shrink-0" />
-              <span className="text-ui-body break-words">{option}</span>
+      <h3 id={questionId} className="text-ui-body font-semibold leading-relaxed break-words">{request.question}</h3>
+
+      <fieldset disabled={locked} aria-labelledby={questionId} className="mt-4 min-w-0 space-y-2 disabled:opacity-60">
+        {[...request.options, 'Свой вариант'].map((option, index) => {
+          const value = index === request.options.length ? 'other' : index
+          const selected = selection === value
+          return (
+            <label key={index} className={`relative flex min-h-12 items-center gap-3 rounded-xl border px-4 py-3 transition-colors focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 focus-within:ring-offset-surface ${locked ? 'cursor-wait' : 'cursor-pointer'} ${selected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-surface-2'}`}>
+              <input
+                type="radio"
+                name={id}
+                value={value}
+                checked={selected}
+                onChange={() => { setSelection(value); setError(false) }}
+                className="sr-only"
+              />
+              <span aria-hidden="true" className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-foreground/25'}`}>
+                {selected && <LuCheck className="size-3.5" />}
+              </span>
+              <span className="text-ui-body min-w-0 flex-1 leading-relaxed break-words">{option}</span>
+              {value === 'other' && <LuPencil aria-hidden="true" className="text-foreground/45 size-4 shrink-0" />}
             </label>
-          ))}
-          <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 ${selected === 'other' ? 'border-primary bg-primary/5' : 'border-border hover:bg-surface-2'}`}>
-            <input type="radio" name={id} checked={selected === 'other'} onChange={() => setSelected('other')} className="accent-primary size-4" />
-            <span className="text-ui-body">Другое</span>
-          </label>
-        </div>
-        {selected === 'other' && (
-          <div className="space-y-2">
-            <label htmlFor={`${id}-other`} className="text-ui-body">Ваш вариант</label>
-            <Textarea id={`${id}-other`} value={other} onChange={(event) => setOther(event.target.value)} placeholder="Введите своё уточнение…" rows={3} maxLength={4000} required autoFocus />
+          )
+        })}
+        {selection === 'other' && (
+          <div className="pt-2">
+            <label htmlFor={`${id}-custom`} className="text-ui-small mb-2 block font-medium">Ваш ответ</label>
+            <Textarea
+              id={`${id}-custom`}
+              value={customAnswer}
+              onChange={(event) => { setCustomAnswer(event.target.value); setError(false) }}
+              placeholder="Опишите, что вы имеете в виду…"
+              rows={3}
+              maxLength={4000}
+              required
+              autoFocus
+              className="w-full resize-y"
+            />
           </div>
         )}
-        <div className="flex justify-end pt-2">
-          <Button type="submit" size="sm" disabled={busy || !content} className="whitespace-normal">{busy ? 'Отправляем…' : 'Отправить'}</Button>
-        </div>
       </fieldset>
+
+      {error && <p role="alert" className="text-error text-ui-small mt-3">Не удалось отправить. Ваш ответ сохранён — попробуйте ещё раз.</p>}
+      <div className="mt-4 flex justify-end">
+        <Button type="submit" disabled={locked || !content} className="flex min-h-11 w-full items-center justify-center gap-2 sm:w-auto">
+          {locked ? <LuLoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" /> : <LuArrowRight aria-hidden="true" className="size-4" />}
+          {locked ? 'Отправляем…' : 'Продолжить'}
+        </Button>
+      </div>
     </form>
   )
 }

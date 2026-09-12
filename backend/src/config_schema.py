@@ -53,6 +53,13 @@ class MlxSettings(SettingBaseModel):
     temperature: float = Field(default=0.0, ge=0, le=2)
 
 
+class AuditSettings(SettingBaseModel):
+    """LLM output budget for administrative feedback analysis."""
+
+    max_tokens: int = Field(default=4096, ge=512, le=16384)
+    "Maximum output tokens for an audit report; independent of short chat answers"
+
+
 class KnowledgeSearchSettings(SettingBaseModel):
     """Local semantic search settings for the Memvid knowledge base."""
 
@@ -87,6 +94,8 @@ class Settings(SettingBaseModel):
     "Local answer generator: llama_cpp or mlx. The API never calls OpenAI/Gemini/Claude."
     llama_cpp: LlamaCppSettings = Field(default_factory=LlamaCppSettings)
     "llama.cpp server used when model_provider is llama_cpp. Disabled by default."
+    audit: AuditSettings = Field(default_factory=AuditSettings)
+    "Administrative audit report generation settings"
     mlx: MlxSettings = Field(default_factory=MlxSettings)
     "MLX server used when model_provider is mlx. Run scripts/start_mlx_server.sh on the Mac host."
 

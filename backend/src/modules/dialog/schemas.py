@@ -44,8 +44,8 @@ class ClarificationQuestion(BaseSchema):
     @classmethod
     def validate_options(cls, values: list[str]) -> list[str]:
         normalized = [value.casefold() for value in values]
-        if len(set(normalized)) != len(normalized) or "другое" in normalized:
-            raise ValueError("Options must be unique; Other is provided by the UI")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("Options must be unique")
         return values
 
 
@@ -61,6 +61,20 @@ class MessageCreate(BaseSchema):
     clarification_id: str | None = None
 
 
+class DialogFeedbackCreate(BaseSchema):
+    rating: Literal["complete", "partial", "irrelevant"]
+    comment: Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)] = ""
+
+
+class DialogFeedback(DialogFeedbackCreate):
+    submitted_at: dtm.datetime
+
+    @field_validator("submitted_at")
+    @classmethod
+    def normalize_submitted_at(cls, value: dtm.datetime) -> dtm.datetime:
+        return value.replace(tzinfo=dtm.UTC) if value.tzinfo is None else value
+
+
 class DialogResponse(BaseSchema):
     id: str
     reply: str
@@ -71,6 +85,7 @@ class DialogResponse(BaseSchema):
     citations: list[Citation] = Field(default_factory=list)
     closed: bool = False
     reason: str | None = None
+    feedback: DialogFeedback | None = None
     updated_at: dtm.datetime | None = None
 
 
@@ -94,6 +109,7 @@ class DialogListItem(BaseSchema):
     line: SupportLine | None = None
     closed: bool = False
     reason: str | None = None
+    feedback: DialogFeedback | None = None
     updated_at: dtm.datetime
 
 

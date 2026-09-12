@@ -284,6 +284,7 @@ class MemvidKnowledgeRetriever:
         # inflections literally, and sem top-24 misses whole relevant sections.
         # On first use fetch every existing vector's text with the real query;
         # cache a stemmed BM25 index, without writing/reembedding the .mv2 file.
+        print(self._frame_count if not self._chunks else max(limit * 12, 64))
         result = self.memory.find(
             query,
             k=self._frame_count if not self._chunks else max(limit * 12, 64),

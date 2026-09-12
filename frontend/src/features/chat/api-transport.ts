@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { $api, eventsFetch } from '@/api'
 import { readDialogStream } from './stream.ts'
 import type { SchemaDialogResponse, SchemaDialogView, SchemaMessageCreate } from '@/api/types'
-import { isBackendDialogId, isDialogNotFound, isDialogPayload, mapDialogResponse, mapSpecialistResponse } from './dialog-map.ts'
+import { isBackendDialogId, isDialogNotFound, isDialogPayload, mapDialogFeedback, mapDialogResponse, mapSpecialistResponse } from './dialog-map.ts'
 import type { ChatToolCall, ChatTransport } from './types.ts'
 
 export { isBackendDialogId, isDialogNotFound, isDialogPayload, mapDialogResponse, mapSpecialistResponse } from './dialog-map.ts'
@@ -45,6 +45,7 @@ export function useApiTransport(): ChatTransport {
   const queryClient = useQueryClient()
   const { mutateAsync: createDialog } = $api.useMutation('post', '/dialogs')
   const { mutateAsync: escalate } = $api.useMutation('post', '/dialogs/{dialog_id}/escalate')
+  const { mutateAsync: saveFeedback } = $api.useMutation('put', '/dialogs/{dialog_id}/feedback')
   const { mutateAsync: deleteDialog } = $api.useMutation('delete', '/dialogs/{dialog_id}')
   const { mutateAsync: deleteDialogs } = $api.useMutation('delete', '/dialogs')
 
@@ -82,6 +83,11 @@ export function useApiTransport(): ChatTransport {
             throw error
           }
         },
+        submitFeedback: async (chatId, rating, comment, signal) => {
+          const feedback = await saveFeedback({ params: { path: { dialog_id: chatId } }, body: { rating, comment }, signal })
+          invalidateDialogs()
+          return mapDialogFeedback(feedback)
+        },
         delete: async (chatId, signal) => {
           if (!isBackendDialogId(chatId)) return
           try {
@@ -99,6 +105,6 @@ export function useApiTransport(): ChatTransport {
         },
       }
     },
-    [createDialog, deleteDialog, deleteDialogs, escalate, queryClient],
+    [createDialog, deleteDialog, deleteDialogs, escalate, saveFeedback, queryClient],
   )
 }
