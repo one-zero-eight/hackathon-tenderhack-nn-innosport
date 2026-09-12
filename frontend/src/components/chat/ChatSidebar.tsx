@@ -105,7 +105,6 @@ export default function ChatSidebar({
           <LuTrash2 className="size-4" />
           Удалить все обращения
         </Button>
-        <p className="text-ui-title font-semibold tracking-tight">Техподдержка</p>
       </div>
     </div>
   )
