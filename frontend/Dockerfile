@@ -1,7 +1,8 @@
-FROM node:20-alpine AS build
+FROM node:20-bookworm-slim AS build
 
 WORKDIR /app
 
+# node:20-alpine is musl; @pnpm/exe@10.22.0 has no linux-arm64-musl binary.
 COPY package.json pnpm-lock.yaml ./
 RUN npm install -g pnpm
 RUN pnpm install --frozen-lockfile
