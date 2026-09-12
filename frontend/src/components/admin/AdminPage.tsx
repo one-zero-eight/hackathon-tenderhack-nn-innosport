@@ -4,6 +4,7 @@ import { $api } from '@/api'
 import Button from '@/components/ui/Button'
 import ChatTranscript from '@/components/chat/ChatTranscript'
 import { chatFromDialogView } from '@/features/chat/dialog-map'
+import AdminAuditPanel from './AdminAuditPanel'
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
@@ -14,6 +15,7 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
 
 export default function AdminPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [mode, setMode] = useState<'chat' | 'audit'>('chat')
   const listQuery = $api.useQuery('get', '/dialogs', { params: { query: { limit: 500 } } })
   const dialogs = listQuery.data ?? []
   const selectedDialog = dialogs.find((dialog) => dialog.id === selectedId) ?? dialogs[0]
@@ -21,21 +23,21 @@ export default function AdminPage() {
     'get',
     '/dialogs/{dialog_id}',
     { params: { path: { dialog_id: selectedDialog?.id ?? '' } } },
-    { enabled: Boolean(selectedDialog) },
+    { enabled: mode === 'chat' && Boolean(selectedDialog) },
   )
   const chat = selectedDialog && dialogQuery.data?.id === selectedDialog.id ? chatFromDialogView(dialogQuery.data) : null
 
   return (
-    <main className="bg-background text-foreground min-h-dvh p-4">
+    <main className="bg-background text-foreground h-dvh overflow-hidden p-4">
       <h1 className="sr-only">Админ-панель обращений</h1>
-      <div className="mx-auto grid max-w-[1600px] gap-4 xl:h-[calc(100dvh-2rem)] xl:grid-cols-[15rem_minmax(0,1fr)]">
+      <div className="mx-auto grid h-full max-w-[1600px] grid-rows-[minmax(0,2fr)_minmax(0,3fr)] gap-4 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1">
         <aside aria-labelledby="admin-appeals-title" className="border-border bg-surface flex min-h-0 flex-col overflow-hidden rounded-2xl border">
-          <header className="border-border border-b px-4 py-4">
+          <header className="border-border shrink-0 border-b px-4 py-4">
             <h2 id="admin-appeals-title" className="text-ui-title font-semibold">
               Список обращений
             </h2>
           </header>
-          <nav aria-label="Обращения пользователей" className="max-h-80 min-h-0 overflow-y-auto p-2 xl:max-h-none xl:flex-1">
+          <nav aria-label="Обращения пользователей" className="min-h-0 flex-1 overflow-y-auto p-2">
             {listQuery.isPending && <p role="status" className="text-foreground/50 p-3">Загружаем обращения…</p>}
             {listQuery.isError && (
               <div role="alert" className="space-y-3 p-3">
@@ -46,12 +48,15 @@ export default function AdminPage() {
             {listQuery.isSuccess && dialogs.length === 0 && <p className="text-foreground/50 p-3">Обращений пока нет.</p>}
             <ul className="space-y-1">
               {dialogs.map((dialog) => {
-                const active = dialog.id === selectedDialog?.id
+                const active = mode === 'chat' && dialog.id === selectedDialog?.id
                 return (
                   <li key={dialog.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(dialog.id)}
+                      onClick={() => {
+                        setSelectedId(dialog.id)
+                        setMode('chat')
+                      }}
                       aria-current={active ? 'page' : undefined}
                       className={`focus-visible:ring-primary w-full cursor-pointer rounded-xl border px-3 py-3 text-left outline-none transition-colors focus-visible:ring-2 ${active ? 'border-primary/25 bg-primary/5' : 'border-transparent hover:border-border hover:bg-surface-2'}`}
                     >
@@ -74,25 +79,31 @@ export default function AdminPage() {
             </ul>
             {dialogs.length === 500 && <p className="text-foreground/50 text-ui-small p-3">Показаны последние 500 обращений.</p>}
           </nav>
+          <footer className="border-border shrink-0 border-t p-3">
+            <Button variant="primary" className="w-full" aria-pressed={mode === 'audit'} onClick={() => setMode('audit')}>Начать аудит</Button>
+          </footer>
         </aside>
 
-        <section aria-label="История обращения" className="border-border bg-surface relative flex h-[70dvh] min-h-[32rem] min-w-0 flex-col overflow-hidden rounded-2xl border xl:h-auto xl:min-h-0">
-          {!selectedDialog ? (
-            <p className="text-foreground/50 m-auto p-6 text-center">Выберите обращение для просмотра истории.</p>
-          ) : dialogQuery.isPending ? (
-            <p role="status" className="text-foreground/50 m-auto p-6 text-center">Загружаем историю…</p>
-          ) : dialogQuery.isError ? (
-            <div role="alert" className="m-auto space-y-3 p-6 text-center">
-              <p className="text-error">Не удалось загрузить историю обращения.</p>
-              <Button variant="outline" size="sm" disabled={dialogQuery.isFetching} onClick={() => void dialogQuery.refetch()}>Повторить</Button>
-            </div>
-          ) : chat && chat.messages.length > 0 ? (
-            <ChatTranscript key={chat.id} chat={chat} />
-          ) : (
-            <p className="text-foreground/50 m-auto p-6 text-center">В обращении пока нет сообщений.</p>
-          )}
-        </section>
-
+        {mode === 'audit' ? (
+          <AdminAuditPanel />
+        ) : (
+          <section aria-label="История обращения" className="border-border bg-surface relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border">
+            {!selectedDialog ? (
+              <p className="text-foreground/50 m-auto p-6 text-center">Выберите обращение для просмотра истории.</p>
+            ) : dialogQuery.isPending ? (
+              <p role="status" className="text-foreground/50 m-auto p-6 text-center">Загружаем историю…</p>
+            ) : dialogQuery.isError ? (
+              <div role="alert" className="m-auto space-y-3 p-6 text-center">
+                <p className="text-error">Не удалось загрузить историю обращения.</p>
+                <Button variant="outline" size="sm" disabled={dialogQuery.isFetching} onClick={() => void dialogQuery.refetch()}>Повторить</Button>
+              </div>
+            ) : chat && chat.messages.length > 0 ? (
+              <ChatTranscript key={chat.id} chat={chat} />
+            ) : (
+              <p className="text-foreground/50 m-auto p-6 text-center">В обращении пока нет сообщений.</p>
+            )}
+          </section>
+        )}
       </div>
     </main>
   )
