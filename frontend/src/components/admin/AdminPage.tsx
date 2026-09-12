@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { LuCheck, LuClock3, LuMessageSquare } from 'react-icons/lu'
+import { $api } from '@/api'
+import Button from '@/components/ui/Button'
 import ChatTranscript from '@/components/chat/ChatTranscript'
-import { adminAppeals } from '@/features/admin/fixtures'
+import { chatFromDialogView } from '@/features/chat/dialog-map'
 import AdminFeedbackPanel from './AdminFeedbackPanel'
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -12,8 +14,17 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
 })
 
 export default function AdminPage() {
-  const [selectedId, setSelectedId] = useState(adminAppeals[0].chat.id)
-  const selectedAppeal = adminAppeals.find((appeal) => appeal.chat.id === selectedId) ?? adminAppeals[0]
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const listQuery = $api.useQuery('get', '/dialogs', { params: { query: { limit: 500 } } })
+  const dialogs = listQuery.data ?? []
+  const selectedDialog = dialogs.find((dialog) => dialog.id === selectedId) ?? dialogs[0]
+  const dialogQuery = $api.useQuery(
+    'get',
+    '/dialogs/{dialog_id}',
+    { params: { path: { dialog_id: selectedDialog?.id ?? '' } } },
+    { enabled: Boolean(selectedDialog) },
+  )
+  const chat = selectedDialog && dialogQuery.data?.id === selectedDialog.id ? chatFromDialogView(dialogQuery.data) : null
 
   return (
     <main className="bg-background text-foreground min-h-dvh p-4">
@@ -26,42 +37,64 @@ export default function AdminPage() {
             </h2>
           </header>
           <nav aria-label="Обращения пользователей" className="max-h-80 min-h-0 overflow-y-auto p-2 xl:max-h-none xl:flex-1">
+            {listQuery.isPending && <p role="status" className="text-foreground/50 p-3">Загружаем обращения…</p>}
+            {listQuery.isError && (
+              <div role="alert" className="space-y-3 p-3">
+                <p className="text-error">Не удалось загрузить обращения.</p>
+                <Button variant="outline" size="sm" disabled={listQuery.isFetching} onClick={() => void listQuery.refetch()}>Повторить</Button>
+              </div>
+            )}
+            {listQuery.isSuccess && dialogs.length === 0 && <p className="text-foreground/50 p-3">Обращений пока нет.</p>}
             <ul className="space-y-1">
-              {adminAppeals.map((appeal) => {
-                const active = appeal.chat.id === selectedAppeal.chat.id
+              {dialogs.map((dialog) => {
+                const active = dialog.id === selectedDialog?.id
                 return (
-                  <li key={appeal.chat.id}>
+                  <li key={dialog.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(appeal.chat.id)}
+                      onClick={() => setSelectedId(dialog.id)}
                       aria-current={active ? 'page' : undefined}
                       className={`focus-visible:ring-primary w-full cursor-pointer rounded-xl border px-3 py-3 text-left outline-none transition-colors focus-visible:ring-2 ${active ? 'border-primary/25 bg-primary/5' : 'border-transparent hover:border-border hover:bg-surface-2'}`}
                     >
                       <span className="flex items-center gap-2 font-medium">
                         <LuMessageSquare className="text-foreground/40 size-4 shrink-0" />
-                        <span className="truncate">{appeal.userId}</span>
+                        <span className="truncate" title={dialog.title}>{dialog.title}</span>
                       </span>
-                      <span className="text-foreground/65 text-ui-small mt-1 block truncate">{appeal.chat.title}</span>
+                      <span className="text-foreground/65 text-ui-small mt-1 block truncate">{dialog.preview}</span>
                       <span className="text-foreground/45 text-ui-small mt-2 flex items-center justify-between gap-2">
                         <span className="flex items-center gap-1">
-                          {appeal.chat.status === 'closed' ? <LuCheck className="size-3.5" /> : <LuClock3 className="size-3.5" />}
-                          {appeal.chat.status === 'closed' ? 'Завершено' : 'Открыто'}
+                          {dialog.closed ? <LuCheck className="size-3.5" /> : <LuClock3 className="size-3.5" />}
+                          {dialog.closed ? 'Завершено' : 'Открыто'}
                         </span>
-                        <time dateTime={appeal.chat.updatedAt}>{dateFormatter.format(new Date(appeal.chat.updatedAt))}</time>
+                        <time dateTime={dialog.updated_at}>{dateFormatter.format(new Date(dialog.updated_at))}</time>
                       </span>
                     </button>
                   </li>
                 )
               })}
             </ul>
+            {dialogs.length === 500 && <p className="text-foreground/50 text-ui-small p-3">Показаны последние 500 обращений.</p>}
           </nav>
         </aside>
 
         <section aria-label="История обращения" className="border-border bg-surface relative flex h-[70dvh] min-h-[32rem] min-w-0 flex-col overflow-hidden rounded-2xl border xl:h-auto xl:min-h-0">
-          <ChatTranscript key={selectedAppeal.chat.id} chat={selectedAppeal.chat} />
+          {!selectedDialog ? (
+            <p className="text-foreground/50 m-auto p-6 text-center">Выберите обращение для просмотра истории.</p>
+          ) : dialogQuery.isPending ? (
+            <p role="status" className="text-foreground/50 m-auto p-6 text-center">Загружаем историю…</p>
+          ) : dialogQuery.isError ? (
+            <div role="alert" className="m-auto space-y-3 p-6 text-center">
+              <p className="text-error">Не удалось загрузить историю обращения.</p>
+              <Button variant="outline" size="sm" disabled={dialogQuery.isFetching} onClick={() => void dialogQuery.refetch()}>Повторить</Button>
+            </div>
+          ) : chat && chat.messages.length > 0 ? (
+            <ChatTranscript key={chat.id} chat={chat} />
+          ) : (
+            <p className="text-foreground/50 m-auto p-6 text-center">В обращении пока нет сообщений.</p>
+          )}
         </section>
 
-        <AdminFeedbackPanel appeal={selectedAppeal} />
+        <AdminFeedbackPanel />
       </div>
     </main>
   )
