@@ -16,6 +16,7 @@ from src.modules.autocomplete import QueryAutocomplete
 from src.modules.dialog.factory import build_dialog_service, build_llama_client_from_settings
 from src.modules.dialog.insights import DialogInsightsService
 from src.storages.mongo import document_models
+from src.storages.mongo.knowledge import KnowledgeChunk
 
 
 async def setup_database() -> AsyncIOMotorClient:
@@ -38,6 +39,7 @@ async def setup_database() -> AsyncIOMotorClient:
 
     mongo_db = motor_client.get_database()
     await init_beanie(database=mongo_db, document_models=document_models, recreate_views=True)
+    await KnowledgeChunk.ensure_search_indexes()
     return motor_client
 
 

@@ -296,26 +296,6 @@ class DialogService:
                 line=None,
             )
 
-        if isinstance(self.llama_client, NullLlamaClient) and (is_greeting(text) or is_capability_question(text)):
-            return self._finish(
-                state,
-                reply=GREETING_REPLY if is_greeting(text) else CAPABILITIES_REPLY,
-                status=DialogStatus.CLARIFYING,
-                closed=False,
-                reason=None,
-                line=None,
-            )
-
-        if pending is None and is_thanks(text):
-            return self._finish(
-                state,
-                reply="Пожалуйста! Обращайтесь, если появятся вопросы.",
-                status=DialogStatus.CLARIFYING,
-                closed=False,
-                reason=None,
-                line=None,
-            )
-
         history = [(item.role, item.content) for item in state.messages]
         agent_question = text
         if pending is not None:

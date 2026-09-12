@@ -25,6 +25,7 @@ dependencies = [
     "fastexcel>=0.21.0",
     "pypdf>=5.1.0",
     "markdown-it-py>=4.2.0",
+    # "sentence-transformers>=6.0.1",
 ]
 
 [tool.pytest.ini_options]
