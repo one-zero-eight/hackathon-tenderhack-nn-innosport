@@ -66,8 +66,11 @@ dependencies = [
     { name = "gunicorn" },
     { name = "httpx" },
     { name = "joserfc" },
+    { name = "memvid-sdk" },
     { name = "polars" },
     { name = "pydantic" },
+    { name = "pypdf" },
+    { name = "pyyaml" },
     { name = "ruff" },
     { name = "uvicorn" },
 ]
@@ -95,8 +98,11 @@ requires-dist = [
     { name = "gunicorn", specifier = ">=23.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "joserfc", specifier = ">=1.6.5" },
+    { name = "memvid-sdk", specifier = "==2.0.160" },
     { name = "polars", specifier = ">=1.44.2" },
     { name = "pydantic", specifier = ">=2.12.2" },
+    { name = "pypdf", specifier = ">=5.1.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "ruff", specifier = ">=0.9.2" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]
@@ -736,6 +742,22 @@ wheels = [
 ]
 
 [[package]]
+name = "memvid-sdk"
+version = "2.0.160"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7e/1a/709899b6757e1d1fde0bbe7e97fd814411931ab6c8c68b876305404b7a83/memvid_sdk-2.0.160.tar.gz", hash = "sha256:8eab5aec9a30eb459f553ed091038b6916d02a2f33569b32a7aee1b556820243", size = 9880521, upload-time = "2026-05-27T19:47:09.601Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/ab/3be4c188166051163ddcf5f2bf87007d69373705ee23e1e638af4bb889f6/memvid_sdk-2.0.160-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:519edbca20082a2a850750fd1c8391f5868f7282f2574c65f4b135a0dc03a95d", size = 66480290, upload-time = "2026-05-27T19:46:48.109Z" },
+    { url = "https://files.pythonhosted.org/packages/70/03/149b19a9232dae6a933530ba2878b404dbf37f5fd7880e81da1a4be811a8/memvid_sdk-2.0.160-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:e083362b2b40e6fb29597223b01f8130f455a40142dd3f97eff4aa9f5d3458ab", size = 64139837, upload-time = "2026-05-27T19:46:53.038Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/cf/86e7b9718f67b75a1905e3285671c2a6921ecd729712d2e38946b1b46f32/memvid_sdk-2.0.160-cp38-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:1999b217071e516ca4b70b8b8b94b1235a2ed4c80e9bb3b3804516f41348504b", size = 14800219, upload-time = "2026-05-27T19:46:56.452Z" },
+    { url = "https://files.pythonhosted.org/packages/db/d2/0e0016395dcfaf4481f482d355dded4fe602d9718907ba55ed4c18da428a/memvid_sdk-2.0.160-cp38-abi3-manylinux_2_35_x86_64.whl", hash = "sha256:37291d5e3fcc4f9f876fd5354060f034815a433c5b29a8b5c1f4cf508a4ba680", size = 99770217, upload-time = "2026-05-27T19:47:02.478Z" },
+    { url = "https://files.pythonhosted.org/packages/da/f9/d724a488208507d1435c74ef00a55015ae3bb0f33ac76050b178e84f6afc/memvid_sdk-2.0.160-cp38-abi3-win_amd64.whl", hash = "sha256:c3a447bee84b38caea2b6f53be253ac2bfe8f8f064ffc6611b5cde727d4f4cd4", size = 7502693, upload-time = "2026-05-27T19:47:07.32Z" },
+]
+
+[[package]]
 name = "motor"
 version = "3.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -944,6 +966,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/00/a5/86777256266850eb2217d6c8c8f382a213a1773c144383d51f61bbb2e651/pymongo-4.18.1-cp314-cp314t-win32.whl", hash = "sha256:9da74b79e382bb37311b9bd5beb89f1369a1c3e27e7c97bae79661cfdf3893aa", size = 818806, upload-time = "2026-09-10T14:56:47.024Z" },
     { url = "https://files.pythonhosted.org/packages/49/6d/08e9256de9fab497465e7e6589fab4d40ca266dcceb88d3acdd0947095e1/pymongo-4.18.1-cp314-cp314t-win_amd64.whl", hash = "sha256:016d21e7fbf55ac89f419daa48da95314896205d902ed9aa4058f26a436e789c", size = 826141, upload-time = "2026-09-10T14:56:48.886Z" },
     { url = "https://files.pythonhosted.org/packages/cc/f2/12afe9d59fb82b60832356f9fe8f454a99371c0e0a42f0ec7856f5c893fd/pymongo-4.18.1-cp314-cp314t-win_arm64.whl", hash = "sha256:960c61ed86a316d3636b1f184006d3cc2b972b8546186ae8e2c8324e397632ff", size = 817669, upload-time = "2026-09-10T14:56:50.602Z" },
+]
+
+[[package]]
+name = "pypdf"
+version = "6.18.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/c2/e537e78a8282b51ed47031566be118debbc34c04782a9afd8739672eb07d/pypdf-6.18.1.tar.gz", hash = "sha256:2441fc839053745638d9b9ddb38ed66beed8d611f47a3036c9838fc4e3074dea", size = 7027577, upload-time = "2026-09-11T10:10:07.616Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/13/645df3995075112cb3cce15e8797c205f0f88fb50acc11012b84b071bc22/pypdf-6.18.1-py3-none-any.whl", hash = "sha256:ee93a2665670ecf57ee81d197a4ca548f3dc15f9cefc56e59b8140866aaa3de5", size = 394327, upload-time = "2026-09-11T10:10:06.103Z" },
 ]
 
 [[package]]

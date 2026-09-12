@@ -3,6 +3,7 @@
 
 # Except code
 !/src/
+!/data/
 !/pyproject.toml
 !/uv.lock
 

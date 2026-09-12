@@ -14,6 +14,24 @@ class SettingBaseModel(BaseModel):
     model_config = ConfigDict(use_attribute_docstrings=True, extra="forbid")
 
 
+class LlamaCppSettings(SettingBaseModel):
+    """Optional local llama.cpp server for topic classification and grounded answers."""
+
+    enabled: bool = False
+    "If false, classification is fully deterministic"
+    base_url: str = "http://127.0.0.1:8080"
+    "OpenAI-compatible llama.cpp server, e.g. http://127.0.0.1:8080 or http://192.168.1.10:8080"
+    model: str = ""
+    "Model name forwarded to /v1/chat/completions. Empty string lets llama.cpp use its loaded model."
+    timeout_seconds: float = Field(default=8.0, gt=0, le=120)
+    "HTTP timeout; on timeout the API falls back to keyword scoring"
+    max_tokens: int = Field(default=96, gt=0, le=8192)
+    "Maximum output tokens for topic classification"
+    answer_max_tokens: int = Field(default=600, gt=0, le=8192)
+    "Maximum output tokens for a grounded answer"
+    temperature: float = Field(default=0.0, ge=0, le=2)
+
+
 class Settings(SettingBaseModel):
     """Settings for the application."""
 
@@ -31,6 +49,12 @@ class Settings(SettingBaseModel):
     "MongoDB database settings"
     cors_allow_origin_regex: str = ".*"
     "Allowed origins for CORS: from which domains requests to the API are allowed. Specify as a regex: `https://.*.innohassle.ru`"
+    knowledge_dir: str = "data"
+    "Directory with topic_catalog.json, relative to the backend working directory"
+    knowledge_memvid_path: str = "data/knowledge.mv2"
+    "Path to the teammate-produced lexical Memvid knowledge base"
+    llama_cpp: LlamaCppSettings = Field(default_factory=LlamaCppSettings)
+    "Local llama.cpp classifier. Disabled by default; the API never calls OpenAI/Gemini/Claude."
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Settings":

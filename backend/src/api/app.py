@@ -1,24 +1,21 @@
 __all__ = ["app"]
 
-import re
-
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import PlainTextResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.requests import Request
+from fastapi.responses import PlainTextResponse
 from fastapi_derive_responses import AutoDeriveResponsesAPIRoute
 from fastapi_swagger import patch_fastapi
-from starlette.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.cors import CORSMiddleware
 
 import src.logging_  # noqa: F401
 from src.api import docs
 from src.api.lifespan import lifespan
 from src.config import settings
 from src.logging_ import logger
-
 
 # App definition
 app = FastAPI(
@@ -41,6 +38,7 @@ app = FastAPI(
 )
 app.router.route_class = AutoDeriveResponsesAPIRoute
 patch_fastapi(app)
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -76,8 +74,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from src.modules.user.routes import router as router_user  # noqa: E402, I001
+from src.modules.dialog.routes import router as router_dialog
 
 # Import routers above and include them below [do not edit this comment]
-app.include_router(router_user)
+app.include_router(router_dialog)
 # ^

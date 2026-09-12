@@ -1,4 +1,14 @@
 # yaml-language-server: $schema=settings.schema.yaml
-$schema: "./settings.schema.yaml"
+$schema: './settings.schema.yaml'
 environment: development
 database_uri: mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin # replace 127.0.0.1 with db in Docker
+knowledge_dir: data
+knowledge_memvid_path: data/knowledge.mv2
+llama_cpp:
+  enabled: false
+  base_url: http://127.0.0.1:8080
+  model: ''
+  timeout_seconds: 8
+  max_tokens: 96
+  answer_max_tokens: 600
+  temperature: 0

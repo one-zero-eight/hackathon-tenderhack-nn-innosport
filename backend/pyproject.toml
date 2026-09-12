@@ -17,12 +17,20 @@ dependencies = [
     "gunicorn>=23.0.0",
     "httpx>=0.28.1",
     "pydantic>=2.12.2",
+    "pyyaml>=6.0.2",
     "ruff>=0.9.2",
     "uvicorn>=0.34.0",
     "beanie>=1.30.0,<2.0.0",
     "polars>=1.44.2",
     "fastexcel>=0.21.0",
+    "pypdf>=5.1.0",
+    "memvid-sdk==2.0.160",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
