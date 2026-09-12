@@ -89,6 +89,7 @@ export interface ChatReply {
 }
 
 export interface ChatTransport {
+  autocomplete?: (query: string, signal: AbortSignal) => Promise<string[]>
   create?: (signal: AbortSignal) => Promise<{ id: string }>
   send: (messages: readonly ChatMessage[], signal: AbortSignal, chatId?: string, onText?: (text: string) => void, onTool?: (tool: ChatToolCall) => void) => Promise<ChatReply>
   requestSpecialist?: (chat: Chat, signal: AbortSignal, contact: SchemaSpecialistContact) => Promise<SpecialistResponse>

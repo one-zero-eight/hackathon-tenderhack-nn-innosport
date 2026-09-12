@@ -181,10 +181,11 @@ export default function ChatPage() {
                       onNewChat={() => void createTicket()}
                     />
                     {(isNewChat || chat.canContactSpecialist) && (
-                      <SpecialistContact key={activeChat.id} busy={!isNewChat && chat.busy} onContact={isNewChat ? (contact) => startRequest(() => chat.contactSpecialist(contact)) : chat.contactSpecialist} />
+                      <SpecialistContact busy={!isNewChat && chat.busy} onContact={isNewChat ? (contact) => startRequest(() => chat.contactSpecialist(contact)) : chat.contactSpecialist} />
                     )}
                     {!closed && (
                       <ChatComposer
+                        autocomplete={transport.autocomplete}
                         draft={isNewChat ? newDraft : chat.draft}
                         onDraft={isNewChat ? setNewDraft : chat.setDraft}
                         onSend={isNewChat ? (text) => (text.trim() ? startRequest(() => chat.send(text)) : Promise.resolve(false)) : chat.send}

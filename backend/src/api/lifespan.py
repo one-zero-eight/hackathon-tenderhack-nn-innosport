@@ -12,6 +12,7 @@ from pymongo.errors import ConnectionFailure
 from src.config import settings
 from src.logging_ import logger
 from src.modules.audit_email import AuditEmailService
+from src.modules.autocomplete import QueryAutocomplete
 from src.modules.dialog.factory import build_dialog_service, build_llama_client_from_settings
 from src.modules.dialog.insights import DialogInsightsService
 from src.storages.mongo import document_models
@@ -43,6 +44,7 @@ async def setup_database() -> AsyncIOMotorClient:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Application startup
+    _app.state.query_autocomplete = QueryAutocomplete()
     motor_client = await setup_database()
     llama_client = build_llama_client_from_settings()
     _app.state.dialog_service = build_dialog_service(

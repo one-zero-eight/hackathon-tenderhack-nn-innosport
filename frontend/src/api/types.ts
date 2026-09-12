@@ -220,6 +220,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/queries/autocomplete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Autocomplete */
+        get: operations["autocomplete_queries_autocomplete_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -320,6 +337,11 @@ export interface components {
              * Format: date-time
              */
             generated_at: string;
+        };
+        /** AutocompleteResponse */
+        AutocompleteResponse: {
+            /** Suggestions */
+            suggestions: string[];
         };
         /** Citation */
         Citation: {
@@ -642,6 +664,7 @@ export type SchemaAuditMessage = components['schemas']['AuditMessage'];
 export type SchemaAuditRatings = components['schemas']['AuditRatings'];
 export type SchemaAuditRequest = components['schemas']['AuditRequest'];
 export type SchemaAuditResponse = components['schemas']['AuditResponse'];
+export type SchemaAutocompleteResponse = components['schemas']['AutocompleteResponse'];
 export type SchemaCitation = components['schemas']['Citation'];
 export type SchemaClarification = components['schemas']['Clarification'];
 export type SchemaDialogAnalytics = components['schemas']['DialogAnalytics'];
@@ -1103,6 +1126,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    autocomplete_queries_autocomplete_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutocompleteResponse"];
                 };
             };
             /** @description Validation Error */

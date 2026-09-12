@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const host = process.env.CADDY_HOSTNAME || 'localhost'
-const baseUrl = host === 'localhost' ? 'http://localhost:8000' : `https://${host}`
+const baseUrl = process.env.API_BASE_URL || (host === 'localhost' ? 'http://localhost:8000' : `https://${host}`)
 const specUrls = [`${baseUrl}/openapi.json`, `${baseUrl}/api/openapi.json`]
 
 function fixHeaders(obj) {
@@ -51,7 +51,7 @@ async function fetchSpec() {
       'run',
       'python',
       '-c',
-      'from fastapi import FastAPI; from src.modules.dialog.routes import router; from src.modules.audit import router as audit_router; import json; app = FastAPI(title="backend"); app.include_router(router); app.include_router(audit_router); print(json.dumps(app.openapi()))',
+      'from fastapi import FastAPI; from src.modules.dialog.routes import router; from src.modules.audit import router as audit_router; from src.modules.autocomplete import router as autocomplete_router; import json; app = FastAPI(title="backend"); app.include_router(router); app.include_router(audit_router); app.include_router(autocomplete_router); print(json.dumps(app.openapi()))',
     ],
     { cwd: join(import.meta.dirname, '../../backend'), encoding: 'utf8' },
   )

@@ -29,15 +29,18 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/settings.docker.yaml:/app/settings.docker.yaml:ro
+      - ./data/sample_queries.txt:/data/sample_queries.txt:ro
     restart: unless-stopped
 
   database:
     image: mongodb/mongodb-atlas-local:latest
     volumes:
       - db:/data/db
-
     ports:
       - 27017:27017
+    environment:
+      MONGODB_INITDB_ROOT_USERNAME: ${MONGODB_INITDB_ROOT_USERNAME:-mongoadmin}
+      MONGODB_INITDB_ROOT_PASSWORD: ${MONGODB_INITDB_ROOT_PASSWORD:-secret}
     restart: unless-stopped
 
 volumes:

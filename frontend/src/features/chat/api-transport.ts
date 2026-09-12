@@ -59,6 +59,11 @@ export function useApiTransport(): ChatTransport {
       void queryClient.invalidateQueries({ queryKey: ['api', 'get', '/dialogs/{dialog_id}/classification'] })
     }
     return {
+      autocomplete: async (query, signal) => {
+        const options = $api.queryOptions('get', '/queries/autocomplete', { params: { query: { q: query, limit: 5 } }, signal }, { staleTime: 60_000, gcTime: 60_000, retry: false })
+        const result = await queryClient.fetchQuery(options)
+        return result.suggestions
+      },
       create: async (signal) => {
         const created = await createDialog({ signal })
         invalidateDialogs()

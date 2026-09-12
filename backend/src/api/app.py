@@ -20,6 +20,7 @@ from src.api.lifespan import lifespan
 from src.config import settings
 from src.logging_ import logger
 from src.modules.audit import router as router_audit
+from src.modules.autocomplete import router as router_autocomplete
 from src.modules.dialog.routes import router as router_dialog
 
 # App definition
@@ -87,4 +88,5 @@ app.add_middleware(
 # Import routers above and include them below [do not edit this comment]
 app.include_router(router_dialog)
 app.include_router(router_audit)
+app.include_router(router_autocomplete)
 # ^
