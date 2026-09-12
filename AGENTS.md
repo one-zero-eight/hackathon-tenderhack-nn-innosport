@@ -14,7 +14,7 @@ DO NOT CREATE useless md files such as QUICKSTART, TASK and so on.
 DO NOT MAKE ridiculous fallbacks.
 DO NOT MAKE any backward compatibility shit unless requested.
 DO NOT EVER WRITE "try: import ... except", as all libraries are expected to be installed.
-DO NOT WRITE "from __future__ import annotations", as Python 3.14+ uses deferred annotations by default.
+DO NOT WRITE "from **future** import annotations", as Python 3.14+ uses deferred annotations by default.
 DO NOT USE `response_model=` in route decorator, use type hints instead:
 
     ```python
@@ -38,6 +38,7 @@ For parallel branches via git worktrees, see [WORKTREE.md](WORKTREE.md).
 ### Git
 
 When finishing a task with code changes:
+
 - stage only the relevant changes (not the full working tree / unrelated diffs); do not stage secrets (`.env`, credentials, local `settings.yaml`)
 - draft a concise conventional commit message matching recent `git log` style (focus on why). **Always include a scope:**
   - `frontend` or `backend` when the change is local (e.g. `feat(frontend): …`, `fix(backend): …`)
@@ -47,15 +48,3 @@ When finishing a task with code changes:
 - if the change is tied to a GitHub issue, put a trailer in the commit body: `Closes one-zero-eight/hackathon-tenderhack-nn-innosport#123` when the commit closes the issue, or `Relates one-zero-eight/hackathon-tenderhack-nn-innosport#123` when it only relates to it
 - propose that message to the IDE Source Control input by writing it to `.scm-commit-msg` at the repo root (gitignored — do not stage it). Requires the SCM Commit Message extension (install once per machine into `~/.cursor/extensions/local.scm-commit-msg-from-file-*/`, then Reload Window). **An existing `.scm-commit-msg` is most probably a draft for earlier changes that were staged (or ready to stage) but not committed yet** — rewrite it so it covers the full set you are about to commit, do not treat it as only the latest chat edit. After an IDE commit the extension clears the SCM input only when it still matches `.scm-commit-msg`, then deletes the file. After a CLI commit, always `rm -f .scm-commit-msg` (the extension then clears the matching SCM input).
 - do **not** run `git commit` unless the user explicitly asks
-
-### Testing
-
-Follow the repository testing guidelines in [TESTING.md](TESTING.md).
-
-! Backend pytest uses in-memory stores and does not need live MongoDB. Frontend tests use `pnpm test`.
-
-When writing tests:
-- prefer behavior and contract tests over implementation-detail tests
-- use in-memory dialog stores/retrievers (`MemoryConversationStore`, `MemoryKnowledgeRetriever`); mock only external systems
-- keep tests independent and parallel-safe
-- run the relevant pytest / `pnpm test` command before claiming the change is complete
