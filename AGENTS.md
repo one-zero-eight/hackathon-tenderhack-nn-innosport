@@ -1,5 +1,13 @@
 Be concise. Avoid overly long explanations. Provide direct answers, or apply code solutions with minimal extra commentary. Only include clarifications if explicitly requested or really necessary, to reduce token usage and keep responses focused. Don't ask for unnecessary permission, just go.
 
+### About
+
+InnoSport is the InNoHassle supplier-portal support product from [TenderHack NN](https://github.com/one-zero-eight/hackathon-tenderhack-nn-innosport): a Russian-language chat UI and a FastAPI dialog API.
+
+- Frontend (`frontend/`) — React 19, TypeScript, Tailwind 4, Vite, pnpm. Chat history, catalog-backed clarifications, specialist handoff, local-only feedback.
+- Backend (`backend/`) — Python 3.14, uv, FastAPI, MongoDB & Beanie. Answers from `data/topic_catalog.json` and Memvid BM25 (`data/knowledge.mv2`). Optional local llama.cpp. No cloud embeddings or web search.
+- Dialog contract — create an appeal, post messages, escalate to L1/L2. `line` stays `null` until `POST /dialogs/{id}/escalate`. Profanity closes the appeal; the API does not invent unsupported answers.
+
 ### Code
 
 DO NOT CREATE useless md files such as QUICKSTART, TASK and so on.
@@ -21,11 +29,11 @@ DO NOT USE `response_model=` in route decorator, use type hints instead:
         return await repo.get_all_scenes()
     ```
 
-This repo is InnoSport: a React/Vite frontend and a FastAPI backend for supplier-portal support dialogs.
+Run the backend from `backend/`. Settings live in `settings.yaml` (gitignored); schema is `src/config_schema.py` / `settings.schema.yaml`. Do not send raw PDFs to a model at request time. `src/ingest/` notebooks are exploratory and are not loaded by the API.
 
-**Backend (`backend/`):** Python 3.14, uv, FastAPI, MongoDB & Beanie. Run from `backend/`. Settings live in `settings.yaml` (gitignored); schema is `src/config_schema.py` / `settings.schema.yaml`. Dialog answers come from the local topic catalog (`data/topic_catalog.json`) and Memvid BM25 (`data/knowledge.mv2`). No cloud embeddings, no web search, no raw PDFs to a model at request time. `line` stays `null` until `POST /dialogs/{id}/escalate`. `src/ingest/` notebooks are exploratory and are not loaded by the API.
+Frontend alias `@/` → `frontend/src`. Name the typed React Query client `$api` at every call site (`frontend/src/api`). Use lowercase HTTP methods and the typed OpenAPI `init` object. Wire the backend through `ChatTransport` in `frontend/src/features/chat/types.ts`; do not parse assistant prose for structure. Regenerate types with `pnpm gen:api` while the backend is running.
 
-**Frontend (`frontend/`):** React 19, TypeScript, Tailwind 4, Vite, pnpm. Alias `@/` → `frontend/src`. Name the typed React Query client `$api` at every call site (`frontend/src/api`). Use lowercase HTTP methods and the typed OpenAPI `init` object. Chat UI is Russian. Wire a real backend through `ChatTransport` in `frontend/src/features/chat/types.ts`; do not parse assistant prose for structure. Regenerate `frontend/src/api/types.ts` with `node scripts/gen-api.mjs` while the backend is running.
+For parallel branches via git worktrees, see [WORKTREE.md](WORKTREE.md).
 
 ### Git
 
@@ -42,15 +50,12 @@ When finishing a task with code changes:
 
 ### Testing
 
-Backend acceptance tests do not need live MongoDB. Frontend chat model tests use Node's built-in test runner.
+Follow the repository testing guidelines in [TESTING.md](TESTING.md).
 
-```bash
-cd backend && uv run pytest
-cd frontend && pnpm test
-```
+! Backend pytest uses in-memory stores and does not need live MongoDB. Frontend tests use `pnpm test`.
 
 When writing tests:
 - prefer behavior and contract tests over implementation-detail tests
-- use in-memory dialog stores/retrievers (`MemoryConversationStore`, `MemoryKnowledgeRetriever`); mock only external systems (llama.cpp)
+- use in-memory dialog stores/retrievers (`MemoryConversationStore`, `MemoryKnowledgeRetriever`); mock only external systems
 - keep tests independent and parallel-safe
 - run the relevant pytest / `pnpm test` command before claiming the change is complete

@@ -1,6 +1,14 @@
 # ИИ-помощник
 
-ИИ-помощник is built with React, TypeScript, Tailwind CSS, and Vite.
+> by InNoHassle
+
+## About
+
+ИИ-помощник is a supplier-portal support chat for [TenderHack NN](https://github.com/one-zero-eight/hackathon-tenderhack-nn-innosport): a Russian-language frontend and a FastAPI backend that answers tickets from a local topic catalog and Memvid BM25 knowledge base. Optional local llama.cpp classifies topics and drafts grounded answers. Specialist handoff assigns L1 or L2; the message loop never invents unsupported answers.
+
+The frontend is built with React, TypeScript, Tailwind CSS, and Vite. The backend is Python 3.14, uv, FastAPI, MongoDB, and Beanie.
+
+Testing guidelines are in [TESTING.md](TESTING.md). Parallel git worktrees are in [WORKTREE.md](WORKTREE.md). Agent conventions are in [AGENTS.md](AGENTS.md).
 
 ## Stack
 
