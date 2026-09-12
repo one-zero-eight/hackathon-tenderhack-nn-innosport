@@ -1,4 +1,5 @@
 from src.modules.dialog.llama import NullLlamaClient
+from src.modules.dialog.models import Chunk, KnowledgeBase, Topic
 from src.modules.dialog.schemas import DialogStatus, SupportLine
 from tests.modules.dialog.conftest import make_service
 
@@ -101,7 +102,9 @@ async def test_clarification_option_index_locks_topic() -> None:
     response = await service.add_message(dialog.id, "1")
     assert response.topic is not None
     assert response.topic.id == chosen.id
-    assert response.status in {DialogStatus.ANSWERED, DialogStatus.ESCALATE}
+    assert response.status == DialogStatus.CLARIFYING
+    assert response.clarification_options == []
+    assert "что именно" in response.reply.lower()
 
 
 async def test_null_llama_does_not_invent_topic() -> None:
@@ -109,3 +112,75 @@ async def test_null_llama_does_not_invent_topic() -> None:
     response = await _ask(service, "абстрактный запрос без ключей")
     assert response.status == DialogStatus.CLARIFYING
     assert response.topic is None
+
+
+async def test_capability_question_offers_topics_without_knowledge_lookup() -> None:
+    service = make_service(chunks=[])
+    response = await _ask(service, "Чем ты можешь мне помочь?")
+
+    assert response.status == DialogStatus.CLARIFYING
+    assert response.reason is None
+    assert response.topic is None
+    assert response.clarification_options
+    assert "портале поставщиков" in response.reply.lower()
+    assert "нет достаточной информации" not in response.reply.lower()
+
+
+async def test_greeting_answers_naturally_and_offers_topics() -> None:
+    service = make_service(chunks=[])
+    response = await _ask(service, "Hi")
+
+    assert response.status == DialogStatus.CLARIFYING
+    assert response.reply.startswith("Здравствуйте!")
+    assert "помогаю" in response.reply.lower()
+    assert response.clarification_options
+
+
+async def test_mchd_question_selects_supplier_topic_and_answers() -> None:
+    supplier = Topic(
+        id="t-002",
+        title="Полномочия",
+        parent_title="Личный кабинет пользователя",
+        description="Полномочия поставщика.",
+        keys=["мчд", "машиночитаемая доверенность"],
+    )
+    customer = Topic(
+        id="t-065",
+        title="Полномочия УО",
+        parent_title="Уполномоченный орган (Региональный заказчик)",
+        description="Полномочия заказчика.",
+        keys=["мчд", "машиночитаемая доверенность"],
+    )
+    chunk = Chunk(
+        id="mchd-1",
+        topic_id=supplier.id,
+        text="МЧД — машиночитаемую доверенность — загружают в профиль пользователя в формате XML.",
+        document="Инструкция_по_работе_с_машиночитаемыми_доверенностями.pdf",
+        section="1.1 Операции с МЧД",
+        path="docs/Инструкция_по_работе_с_машиночитаемыми_доверенностями.pdf",
+    )
+    service = make_service(
+        knowledge=KnowledgeBase(topics=[supplier, customer]),
+        chunks=[chunk],
+        llama_client=NullLlamaClient(),
+    )
+
+    response = await _ask(service, "Расскажи всё, что знаешь про МЧД")
+
+    assert response.status == DialogStatus.ANSWERED
+    assert response.topic is not None
+    assert response.topic.id == supplier.id
+    assert "доверенность" in response.reply.lower()
+
+
+async def test_capability_question_does_not_consume_clarification_attempt() -> None:
+    service = make_service()
+    dialog = await service.create()
+
+    for _ in range(4):
+        response = await service.add_message(dialog.id, "Что ты умеешь?")
+        assert response.status == DialogStatus.CLARIFYING
+        assert response.reason is None
+
+    selected = await service.add_message(dialog.id, "1")
+    assert selected.topic is not None

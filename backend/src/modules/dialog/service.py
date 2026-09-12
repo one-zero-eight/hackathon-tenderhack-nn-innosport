@@ -3,6 +3,9 @@ from fastapi import HTTPException, status
 from src.modules.dialog.abuse import is_abuse
 from src.modules.dialog.classify import (
     clarification_options,
+    is_bare_option_selection,
+    is_capability_question,
+    is_greeting,
     lock_topic,
     match_pending_option,
     rank_topics,
@@ -31,9 +34,11 @@ from src.modules.dialog.store import (
 )
 from src.modules.dialog.texts import (
     ABUSE_REPLY,
+    CAPABILITIES_REPLY,
     CLARIFY_FAILED_REPLY,
     CLARIFY_REPLY,
     CLOSED_REPLY,
+    GREETING_REPLY,
     L1_REPLY,
     L2_REPLY,
     NO_KNOWLEDGE_REPLY,
@@ -142,6 +147,37 @@ class DialogService:
                 reason="abuse",
                 line=None,
             )
+
+        if is_greeting(text) or is_capability_question(text):
+            ranked = rank_topics("", self.knowledge)
+            topics = clarification_options(ranked, self.knowledge)
+            state.topic_id = None
+            state.pending_option_ids = [item.id for item in topics]
+            state.status = DialogStatus.CLARIFYING
+            state.reason = None
+            state.line = None
+            state.citations = []
+            reply = GREETING_REPLY if is_greeting(text) else CAPABILITIES_REPLY
+            return self._response(state, reply, options=topics)
+
+        pending = [
+            topic
+            for topic_id in state.pending_option_ids
+            if (topic := self.knowledge.topic_by_id(topic_id)) is not None
+        ]
+        if pending and (picked := match_pending_option(text, pending)) is not None:
+            if is_bare_option_selection(text, picked):
+                state.topic_id = picked.id
+                state.pending_option_ids = []
+                state.status = DialogStatus.CLARIFYING
+                state.reason = None
+                state.line = None
+                state.citations = []
+                return self._response(
+                    state,
+                    f"Что именно вас интересует по теме «{picked.title}»?",
+                    topic=picked,
+                )
 
         dialog_query = self._dialog_query(state)
         topic = await self._resolve_topic(state, text, dialog_query)

@@ -6,7 +6,7 @@ from memvid_sdk import create
 from shared import embedder
 
 DOCS_DIR = Path(__file__).parent / "documents"
-STORE_PATH = str(Path(__file__).parent / "knowledge.mv2")
+STORE_PATH = str(Path(__file__).parents[1] / "data" / "knowledge.mv2")
 
 HEADING_RE = re.compile(r"^\s*(\d+(?:\.\d+)*)\.?\s+(\S.*)$", re.MULTILINE)
 # Table-of-contents lines look like real headings but trail off in dot leaders
@@ -128,7 +128,11 @@ def split_sections(text: str, source: str) -> list[dict]:
                 "text": chunk,
                 "label": "manual",
                 "labels": ["manual"],
-                "metadata": {"source": source, "chunk": i + 1},
+                "metadata": {
+                    "source": source,
+                    "path": f"docs/{source}",
+                    "chunk": i + 1,
+                },
             }
             for i, chunk in enumerate(pack_units(split_into_units(text)))
         ]
@@ -155,6 +159,7 @@ def split_sections(text: str, source: str) -> list[dict]:
                     "labels": ["manual"],
                     "metadata": {
                         "source": source,
+                        "path": f"docs/{source}",
                         "section": section_number,
                         "section_title": heading_text,
                     },
@@ -184,6 +189,8 @@ def main():
     for item, embedding in zip(items, embeddings):
         mem.put_many([item], embeddings=[embedding])
 
+    mem.commit()
+    mem.close()
     print(f"Ingested {len(items)} chunks from {DOCS_DIR} into {STORE_PATH}")
 
 

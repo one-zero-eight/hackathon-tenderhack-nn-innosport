@@ -6,6 +6,22 @@ $defs:
     - production
     title: Environment
     type: string
+  KnowledgeSearchSettings:
+    additionalProperties: false
+    description: Local semantic search settings for the Memvid knowledge base.
+    properties:
+      embedding_model:
+        default: mxbai-embed-large
+        description: Ollama embedding model used when the Memvid vectors were created
+        title: Embedding Model
+        type: string
+      ollama_base_url:
+        default: http://127.0.0.1:11434
+        description: Local Ollama API used to embed search queries
+        title: Ollama Base Url
+        type: string
+    title: KnowledgeSearchSettings
+    type: object
   LlamaCppSettings:
     additionalProperties: false
     description: Optional local llama.cpp server for topic classification and grounded
@@ -98,9 +114,12 @@ properties:
     type: string
   knowledge_memvid_path:
     default: data/knowledge.mv2
-    description: Path to the teammate-produced lexical Memvid knowledge base
+    description: Path to the teammate-produced vector Memvid knowledge base
     title: Knowledge Memvid Path
     type: string
+  knowledge_search:
+    $ref: '#/$defs/KnowledgeSearchSettings'
+    description: Local semantic retrieval configuration
   llama_cpp:
     $ref: '#/$defs/LlamaCppSettings'
     description: Local llama.cpp classifier. Disabled by default; the API never calls

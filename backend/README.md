@@ -45,8 +45,9 @@ This is the FastAPI ASGI application.
 ### Dialog API (support)
 
 The backend answers supplier-portal tickets from a local topic catalog and the
-single-file `data/knowledge.mv2` knowledge base. Retrieval is local Memvid BM25:
-`find(..., mode="lex")`; no cloud embeddings or web search are used.
+single-file `data/knowledge.mv2` knowledge base. Retrieval uses local Memvid
+vector search (`find(..., mode="sem")`) with `mxbai-embed-large` served by
+Ollama; no cloud embeddings or web search are used.
 
 Knowledge sources live in the repo-root `docs/` directory (topic workbook +
 instruction PDFs). Rebuild the catalog after changing those files:
@@ -63,12 +64,11 @@ file must be placed at `data/knowledge.mv2` (or the path set by
 optional. Hits with incomplete citation metadata are rejected. Raw PDFs are
 never sent to a model at request time.
 
-For `memvid-sdk==2.0.160`, the ingestion code must call `enable_lex()` and
-provide `search_text` as the lowercased chunk without punctuation, then
-`commit()`. Keep source metadata in the same frame. Without `search_text` (or
-when it contains sentence punctuation), the resulting file may report a
-lexical index in `stats()` while `find(mode="lex")` raises the misleading
-`LexIndexDisabledError`.
+The producer and runtime must use the same embedding model. Build every frame
+with `mxbai-embed-large` vectors, enable the vector index, keep source metadata
+in the same frame, and call `commit()`. Before starting the API locally, run
+`ollama pull mxbai-embed-large`; Docker reaches Ollama through
+`host.docker.internal:11434`.
 
 Conversations are stored in MongoDB (`conversations` collection). Create an
 appeal, then post messages:
@@ -142,7 +142,7 @@ Rosetta without GPU and prompt eval drops to tens of tokens/s. Use a native
 the full context on one request instead of splitting it across idle slots.
 
 The model must return JSON with `can_answer`, `answer`, and Memvid frame IDs.
-The backend rejects unknown citations and answers with insufficient lexical
+The backend rejects unknown citations and answers with insufficient source
 grounding. If llama.cpp is down or its answer is rejected, the backend uses an
 extractive answer from the same chunks; if retrieval has no support, it offers
 a specialist instead of inventing information.

@@ -4,6 +4,9 @@ environment: development
 database_uri: mongodb://mongoadmin:secret@127.0.0.1:27017/db?authSource=admin # replace 127.0.0.1 with db in Docker
 knowledge_dir: data
 knowledge_memvid_path: data/knowledge.mv2
+knowledge_search:
+  embedding_model: mxbai-embed-large
+  ollama_base_url: http://127.0.0.1:11434
 llama_cpp:
   enabled: false
   base_url: http://127.0.0.1:8080

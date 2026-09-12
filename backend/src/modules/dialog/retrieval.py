@@ -4,10 +4,11 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from memvid_sdk import MemvidError, use
+from memvid_sdk.embeddings import EmbeddingProvider
 
 from src.logging_ import logger
 from src.modules.dialog.models import Chunk, Topic
-from src.modules.dialog.normalize import STOPWORDS, significant_stems, tokenize
+from src.modules.dialog.normalize import ABBREVIATIONS, significant_stems
 
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 SOURCE_RE = re.compile(r'\bsource:\s*"([^"]+)"', re.IGNORECASE)
@@ -15,7 +16,10 @@ SECTION_RE = re.compile(r'\bsection:\s*"([^"]+)"', re.IGNORECASE)
 SECTION_TITLE_RE = re.compile(r'\bsection_title:\s*"([^"]+)"', re.IGNORECASE)
 PATH_RE = re.compile(r'\bpath:\s*"([^"]+)"', re.IGNORECASE)
 TOPIC_ID_RE = re.compile(r'\btopic_id:\s*"([^"]+)"', re.IGNORECASE)
-SERIALIZED_METADATA_RE = re.compile(r"\s+title:\s.*?\s+labels?:", re.IGNORECASE)
+SERIALIZED_METADATA_RE = re.compile(
+    r"\s+title:\s.*?(?=\s+(?:labels?|path|section|section_title|source|topic_id):)",
+    re.IGNORECASE,
+)
 MIN_RETRIEVAL_SCORE = 2.2
 
 
@@ -31,7 +35,8 @@ def score_chunk(query: str, chunk: Chunk) -> float:
     chunk_stems = set(significant_stems(chunk.text))
     overlap = query_stems & chunk_stems
     heading_stems = set(significant_stems(chunk.section))
-    return 2.0 * len(overlap) + 1.2 * len(query_stems & heading_stems)
+    abbreviation_overlap = overlap & ABBREVIATIONS
+    return 2.0 * len(overlap) + len(abbreviation_overlap) + 1.2 * len(query_stems & heading_stems)
 
 
 class KnowledgeRetriever(Protocol):
@@ -52,16 +57,17 @@ class MemoryKnowledgeRetriever:
 
 
 class MemvidKnowledgeRetriever:
-    """Read-only lexical search over the teammate-produced single-file .mv2."""
+    """Read-only semantic search over the teammate-produced single-file .mv2."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, embedder: EmbeddingProvider) -> None:
         if not path.is_file():
             raise FileNotFoundError(
                 f"Memvid knowledge base not found: {path}. "
                 "Place the teammate-produced file there or update knowledge_memvid_path."
             )
         self.path = path
-        self.memory = use("basic", str(path), read_only=True, enable_lex=True, enable_vec=False)
+        self.embedder = embedder
+        self.memory = use("basic", str(path), read_only=True, enable_lex=False, enable_vec=True)
         self._lock = asyncio.Lock()
 
     async def find(self, query: str, topic: Topic, limit: int = 3) -> list[Chunk]:
@@ -73,46 +79,33 @@ class MemvidKnowledgeRetriever:
             return []
 
     def _find_sync(self, query: str, topic: Topic, limit: int) -> list[Chunk]:
-        terms = list(
-            dict.fromkeys(
-                token for token in tokenize(f"{topic.title} {query}") if token not in STOPWORDS and len(token) >= 3
-            )
+        result = self.memory.find(
+            f"{topic.title}. {query}",
+            k=max(limit * 3, 8),
+            mode="sem",
+            snippet_chars=1400,
+            embedder=self.embedder,
         )
-        if not terms:
-            return []
-        # memvid-sdk 2.0.160 can surface a misleading LexIndexDisabledError for
-        # boolean/long Tantivy queries. Search individual terms and merge hits;
-        # the local relevance score below narrows the broad candidates.
-        merged_hits: dict[str, dict[str, Any]] = {}
-        for term in terms[:12]:
-            result = self.memory.find(
-                term,
-                k=max(limit * 3, 8),
-                mode="lex",
-                snippet_chars=1400,
-            )
-            for hit in result.get("hits", []):
-                key = str(hit.get("frame_id") or hit.get("uri") or "")
-                if key:
-                    merged_hits.setdefault(key, hit)
-        chunks: list[tuple[float, Chunk]] = []
-        for hit in merged_hits.values():
-            chunk = _hit_to_chunk(hit, topic.id)
+        chunks: list[Chunk] = []
+        for hit in result.get("hits", []):
+            chunk = _hit_to_chunk(hit, topic)
             if chunk is None:
                 continue
             metadata = hit.get("metadata")
+            hit_topic: str | None = None
             if isinstance(metadata, dict):
-                hit_topic = metadata.get("topic_id")
-                if hit_topic and hit_topic != topic.id:
-                    continue
+                value = metadata.get("topic_id")
+                hit_topic = value if isinstance(value, str) else None
             elif match := TOPIC_ID_RE.search(str(hit.get("text") or "")):
-                if match.group(1) != topic.id:
-                    continue
-            relevance = score_chunk(f"{topic.title} {query}", chunk)
-            if relevance >= MIN_RETRIEVAL_SCORE:
-                chunks.append((relevance, chunk))
-        chunks.sort(key=lambda item: item[0], reverse=True)
-        return [chunk for _score, chunk in chunks[:limit]]
+                hit_topic = match.group(1)
+            if hit_topic and hit_topic != topic.id:
+                continue
+            if hit_topic is None and score_chunk(f"{topic.title} {query}", chunk) < MIN_RETRIEVAL_SCORE:
+                continue
+            chunks.append(chunk)
+            if len(chunks) >= limit:
+                break
+        return chunks
 
 
 def _metadata(hit: dict[str, Any]) -> dict[str, Any]:
@@ -120,7 +113,7 @@ def _metadata(hit: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _hit_to_chunk(hit: dict[str, Any], topic_id: str) -> Chunk | None:
+def _hit_to_chunk(hit: dict[str, Any], topic: Topic) -> Chunk | None:
     raw_text = str(hit.get("text") or hit.get("snippet") or "").strip()
     if not raw_text:
         return None
@@ -142,6 +135,8 @@ def _hit_to_chunk(hit: dict[str, Any], topic_id: str) -> Chunk | None:
         section_title = match.group(1)
     if not path and (match := PATH_RE.search(raw_text)):
         path = match.group(1)
+    if document and not path:
+        path = f"docs/{document}"
     if not document or not path:
         return None
     section = " ".join(part for part in (section_number, section_title) if part)
@@ -149,7 +144,7 @@ def _hit_to_chunk(hit: dict[str, Any], topic_id: str) -> Chunk | None:
         section = str(hit.get("title") or "Раздел не указан")
     return Chunk(
         id=str(hit.get("frame_id") or hit.get("uri") or ""),
-        topic_id=topic_id,
+        topic_id=topic.id,
         text=text,
         document=document,
         section=section,

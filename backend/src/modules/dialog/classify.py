@@ -36,6 +36,39 @@ GENERIC_KEYS = frozenset(
     }
 )
 
+CAPABILITY_PATTERNS = (
+    re.compile(r"\b(?:что|чем)\s+(?:ты|вы)?\s*(?:можешь|можете)\s+(?:мне\s+|нам\s+)?помочь\b"),
+    re.compile(r"\b(?:что|чем)\s+(?:ты|вы)?\s*(?:умеешь|умеете)\b"),
+    re.compile(r"\b(?:какие|с какими)\s+(?:вопросы|вопросами|темы|темами)\b"),
+    re.compile(r"\bкак(?:ую|ие)\s+помощь\s+(?:ты|вы)?\s*(?:можешь|можете)\b"),
+    re.compile(r"\bwhat\s+can\s+you\s+(?:do|help)\b"),
+)
+
+GREETING_TOKENS = frozenset(
+    {
+        "hi",
+        "hello",
+        "привет",
+        "здравствуй",
+        "здравствуйте",
+        "добрый",
+        "день",
+        "вечер",
+        "утро",
+        "салам",
+    }
+)
+
+
+def is_capability_question(text: str) -> bool:
+    normalized = " ".join(tokenize(text))
+    return any(pattern.search(normalized) for pattern in CAPABILITY_PATTERNS)
+
+
+def is_greeting(text: str) -> bool:
+    tokens = tokenize(text)
+    return bool(tokens) and len(tokens) <= 3 and all(token in GREETING_TOKENS for token in tokens)
+
 
 def _phrase_present(tokens: list[str], phrase: str) -> bool:
     parts = tokenize(phrase)
@@ -85,7 +118,7 @@ def score_topic(text: str, topic: Topic) -> float:
     keys_joined = " ".join(topic.keys).lower()
     for token in query_tokens:
         if token in {"эп", "эцп", "сте", "yml", "упд", "еис", "мчд", "рнп"} and token in keys_joined:
-            score += 2.5
+            score += 8.0 if token == "мчд" else 2.5
     return score
 
 
@@ -114,6 +147,23 @@ def lock_topic(ranked: list[TopicScore], text: str) -> Topic | None:
     winners = [item[0] for item in scored if item[1] == best_fit and item[1][0] > 0]
     if len(winners) == 1:
         return winners[0].topic
+    if "мчд" in tokenize(text):
+        query_tokens = set(tokenize(text))
+        if "уо" in query_tokens or any(token.startswith("заказчик") for token in query_tokens):
+            customer_topics = [
+                item.topic
+                for item in contenders
+                if "уполномоченный орган" in item.topic.parent_title.lower()
+            ]
+            if len(customer_topics) == 1:
+                return customer_topics[0]
+        supplier_topics = [
+            item.topic
+            for item in contenders
+            if "уполномоченный орган" not in item.topic.parent_title.lower()
+        ]
+        if len(supplier_topics) == 1:
+            return supplier_topics[0]
     return None
 
 
@@ -162,3 +212,13 @@ def match_pending_option(text: str, pending: list[Topic]) -> Topic | None:
         if topic.id.lower() in normalized:
             return topic
     return None
+
+
+def is_bare_option_selection(text: str, topic: Topic) -> bool:
+    if OPTION_INDEX_RE.fullmatch(text.strip()):
+        return True
+    normalized = " ".join(tokenize(text))
+    return normalized in {
+        " ".join(tokenize(topic.title)),
+        topic.id.lower(),
+    }

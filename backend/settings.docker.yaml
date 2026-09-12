@@ -4,6 +4,9 @@ environment: development
 database_uri: mongodb://mongoadmin:secret@database:27017/db?authSource=admin
 knowledge_dir: data
 knowledge_memvid_path: data/knowledge.mv2
+knowledge_search:
+  embedding_model: mxbai-embed-large
+  ollama_base_url: http://host.docker.internal:11434
 llama_cpp:
   enabled: true
   base_url: http://host.docker.internal:8081

@@ -32,6 +32,15 @@ class LlamaCppSettings(SettingBaseModel):
     temperature: float = Field(default=0.0, ge=0, le=2)
 
 
+class KnowledgeSearchSettings(SettingBaseModel):
+    """Local semantic search settings for the Memvid knowledge base."""
+
+    embedding_model: str = "mxbai-embed-large"
+    "Ollama embedding model used when the Memvid vectors were created"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    "Local Ollama API used to embed search queries"
+
+
 class Settings(SettingBaseModel):
     """Settings for the application."""
 
@@ -52,7 +61,9 @@ class Settings(SettingBaseModel):
     knowledge_dir: str = "data"
     "Directory with topic_catalog.json, relative to the backend working directory"
     knowledge_memvid_path: str = "data/knowledge.mv2"
-    "Path to the teammate-produced lexical Memvid knowledge base"
+    "Path to the teammate-produced vector Memvid knowledge base"
+    knowledge_search: KnowledgeSearchSettings = Field(default_factory=KnowledgeSearchSettings)
+    "Local semantic retrieval configuration"
     llama_cpp: LlamaCppSettings = Field(default_factory=LlamaCppSettings)
     "Local llama.cpp classifier. Disabled by default; the API never calls OpenAI/Gemini/Claude."
 

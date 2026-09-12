@@ -122,9 +122,10 @@ class LlamaCppClient:
         if not chunks:
             return None
         history_text = _compact_history(history, limit=4)
-        sources = "\n".join(f"[{chunk.id}] {chunk.text[:700]}" for chunk in chunks[:2])
+        sources = "\n".join(f"[{chunk.id}] {chunk.text[:700]}" for chunk in chunks[:3])
         prompt = (
             "Ответь только по источникам, дословными предложениями. "
+            "Для общего вопроса дай несколько разных релевантных фактов без повторов. "
             'JSON: {"can_answer":true,"answer":"...","citation_ids":["id"]}.\n'
             f"Тема: {topic.title}\n{history_text}\n"
             f"Вопрос: {question}\n"

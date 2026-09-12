@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from memvid_sdk.embeddings import OllamaEmbeddings
+
 from src.modules.dialog.catalog import DEFAULT_DATA_DIR, load_knowledge
 from src.modules.dialog.llama import DialogLlamaClient, LlamaCppClient, NullLlamaClient
 from src.modules.dialog.retrieval import KnowledgeRetriever, MemvidKnowledgeRetriever
@@ -43,13 +45,20 @@ def build_dialog_service(
             directory = DEFAULT_DATA_DIR
     knowledge = load_knowledge(directory)
     if retriever is None:
-        if memvid_path is None:
-            from src.config import settings
+        from src.config import settings
 
+        if memvid_path is None:
             memvid_path = Path(settings.knowledge_memvid_path)
             if not memvid_path.is_absolute():
                 memvid_path = Path.cwd() / memvid_path
-        retriever = MemvidKnowledgeRetriever(memvid_path)
+        search = settings.knowledge_search
+        retriever = MemvidKnowledgeRetriever(
+            memvid_path,
+            OllamaEmbeddings(
+                model=search.embedding_model,
+                base_url=search.ollama_base_url,
+            ),
+        )
     if store is None:
         if use_mongo:
             from src.storages.mongo.conversation import MongoConversationStore
