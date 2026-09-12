@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { demoTransport } from './demo-transport.ts'
 import type { SchemaDialogListItem, SchemaDialogView } from '@/api/types'
 import { mergeRemoteDialog, mergeRemoteList } from './dialog-map.ts'
-import { applyExchange, applySpecialistHandoff, canContactSpecialist, canFeedback, CHAT_STORAGE_KEY, CHAT_STORAGE_VERSION, clarificationCount, closeChat as closeChatModel, createChat, dismissFeedback as dismissFeedbackModel, formatClarificationAnswer, isChatReply, isSpecialistResponse, parseChatHistory, pendingClarification, reopenChat as reopenChatModel, serializeChatHistory, submitFeedback as submitFeedbackModel } from './model.ts'
+import { applyExchange, applySpecialistHandoff, canContactSpecialist, canFeedback, CHAT_STORAGE_KEY, CHAT_STORAGE_VERSION, clarificationCount, closeChat as closeChatModel, createChat, dismissFeedback as dismissFeedbackModel, formatClarificationAnswer, isChatReply, isSpecialistResponse, parseChatHistory, pendingClarification, reopenChat as reopenChatModel, serializeChatHistory, submitFeedback as submitFeedbackModel, withOnlyChat, withoutChat } from './model.ts'
 import type { ChatHistory } from './model.ts'
 import type { Chat, ChatMessage, ChatTransport, ClarificationAnswer, ClarificationRequest, FeedbackRating } from './types.ts'
 
@@ -31,6 +31,8 @@ export interface UseChatResult {
   setDraft: (text: string) => void
   createChat: () => Chat | Promise<Chat>
   selectChat: (id: string) => void
+  deleteChat: (id: string) => Promise<boolean>
+  deleteAllChats: () => Promise<boolean>
   syncList: (items: readonly SchemaDialogListItem[]) => void
   syncDialog: (view: SchemaDialogView) => void
   send: (text: string) => Promise<boolean>
@@ -43,6 +45,7 @@ export interface UseChatResult {
   canFeedback: boolean
   canContactSpecialist: boolean
   busy: boolean
+  mutating: boolean
   error: string | null
   clarificationCount: number
   pendingClarification: ClarificationRequest | undefined
@@ -88,7 +91,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     setDrafts(next)
   }, [])
 
-  const startChat = useCallback(async () => {
+  const allocateChat = useCallback(async (): Promise<Chat> => {
     let id = newId()
     if (transport.create) {
       try {
@@ -97,18 +100,26 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
         // First send will create the backend dialog if this eager create fails.
       }
     }
-    const chat = createChat(id, new Date().toISOString())
+    return createChat(id, new Date().toISOString())
+  }, [transport])
+
+  const startChat = useCallback(async () => {
+    const chat = await allocateChat()
     commitHistory({
       ...historyRef.current,
       chats: [chat, ...historyRef.current.chats],
       activeChatId: chat.id,
     })
     return chat
-  }, [commitHistory, transport])
+  }, [allocateChat, commitHistory])
 
   const syncList = useCallback(
     (items: readonly SchemaDialogListItem[]) => {
       const next = mergeRemoteList(historyRef.current, items)
+      if (next.chats.length === 0) {
+        commitHistory(withOnlyChat(createChat(newId(), new Date().toISOString())))
+        return
+      }
       if (next !== historyRef.current) commitHistory(next)
     },
     [commitHistory],
@@ -261,6 +272,62 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     updateActiveChat(dismissFeedbackModel)
   }, [updateActiveChat])
 
+  const deleteChat = useCallback(
+    async (id: string): Promise<boolean> => {
+      const current = historyRef.current
+      if (!current.chats.some((chat) => chat.id === id)) return false
+      operations.current.get(id)?.abort()
+      operations.current.delete(id)
+      setBusyChats((busy) => ({ ...busy, [id]: true }))
+      setErrors((errors) => ({ ...errors, [id]: null }))
+      try {
+        if (transport.delete) await transport.delete(id, new AbortController().signal)
+        if (!mounted.current) return false
+        const leftover = historyRef.current.chats.filter((chat) => chat.id !== id)
+        const replacement = leftover.length === 0 ? await allocateChat() : createChat(newId(), new Date().toISOString())
+        if (!mounted.current) return false
+        commitHistory(withoutChat(historyRef.current, id, replacement))
+        const nextDrafts = { ...draftsRef.current }
+        delete nextDrafts[id]
+        draftsRef.current = nextDrafts
+        setDrafts(nextDrafts)
+        return true
+      } catch {
+        if (mounted.current) {
+          setErrors((errors) => ({ ...errors, [id]: 'Не удалось удалить обращение. Попробуйте ещё раз.' }))
+        }
+        return false
+      } finally {
+        if (mounted.current) setBusyChats((busy) => ({ ...busy, [id]: false }))
+      }
+    },
+    [allocateChat, commitHistory, transport],
+  )
+
+  const deleteAllChats = useCallback(async (): Promise<boolean> => {
+    for (const controller of operations.current.values()) controller.abort()
+    operations.current.clear()
+    setBusyChats(Object.fromEntries(historyRef.current.chats.map((chat) => [chat.id, true])))
+    try {
+      if (transport.deleteAll) await transport.deleteAll(new AbortController().signal)
+      if (!mounted.current) return false
+      const replacement = await allocateChat()
+      if (!mounted.current) return false
+      commitHistory(withOnlyChat(replacement))
+      draftsRef.current = {}
+      setDrafts({})
+      setErrors({})
+      return true
+    } catch {
+      if (mounted.current) {
+        setErrors((current) => ({ ...current, [historyRef.current.activeChatId]: 'Не удалось удалить обращения. Попробуйте ещё раз.' }))
+      }
+      return false
+    } finally {
+      if (mounted.current) setBusyChats({})
+    }
+  }, [allocateChat, commitHistory, transport])
+
   const contactSpecialist = useCallback(async (): Promise<boolean> => {
     const current = historyRef.current
     const chat = current.chats.find((item) => item.id === current.activeChatId)
@@ -307,6 +374,8 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     setDraft,
     createChat: startChat,
     selectChat,
+    deleteChat,
+    deleteAllChats,
     syncList,
     syncDialog,
     send,
@@ -319,6 +388,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     canFeedback: canFeedback(activeChat),
     canContactSpecialist: canContactSpecialist(activeChat),
     busy: busyChats[activeChat.id] ?? false,
+    mutating: Object.values(busyChats).some(Boolean),
     error: errors[activeChat.id] ?? null,
     clarificationCount: clarificationCount(activeChat),
     pendingClarification: pendingClarification(activeChat),

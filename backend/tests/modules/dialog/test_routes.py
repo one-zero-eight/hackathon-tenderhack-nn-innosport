@@ -94,6 +94,20 @@ def test_get_restores_pending_clarification_options() -> None:
     assert restored["clarification_options"] == response["clarification_options"]
 
 
+def test_delete_dialog_and_delete_all() -> None:
+    client = make_client()
+    first = client.post("/dialogs").json()["id"]
+    second = client.post("/dialogs").json()["id"]
+    assert client.delete(f"/dialogs/{first}").json() == {"deleted": 1}
+    assert client.get(f"/dialogs/{first}").status_code == 404
+    remaining = client.get("/dialogs").json()
+    assert [item["id"] for item in remaining] == [second]
+    assert client.delete("/dialogs").json() == {"deleted": 1}
+    assert client.get("/dialogs").json() == []
+    assert client.delete("/dialogs").json() == {"deleted": 0}
+    assert client.delete("/dialogs/not-an-object-id").status_code == 404
+
+
 def test_message_validation_and_unknown_dialog() -> None:
     client = make_client()
     dialog_id = client.post("/dialogs").json()["id"]

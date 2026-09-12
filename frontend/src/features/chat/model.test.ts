@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { getEventListeners } from 'node:events'
-import { applyExchange, applySpecialistHandoff, canContactSpecialist, canFeedback, CHAT_STORAGE_KEY, CHAT_STORAGE_VERSION, clarificationCount, closeChat, createChat, dismissFeedback, formatClarificationAnswer, isChatReply, isSpecialistResponse, isSubstantiveAnswer, parseChatHistory, pendingClarification, reopenChat, serializeChatHistory, submitFeedback } from './model.ts'
+import { applyExchange, applySpecialistHandoff, canContactSpecialist, canFeedback, CHAT_STORAGE_KEY, CHAT_STORAGE_VERSION, clarificationCount, closeChat, createChat, dismissFeedback, formatClarificationAnswer, isChatReply, isSpecialistResponse, isSubstantiveAnswer, parseChatHistory, pendingClarification, reopenChat, serializeChatHistory, submitFeedback, withOnlyChat, withoutChat, type ChatHistory } from './model.ts'
 import { demoDelay, demoTransport } from './demo-transport.ts'
 import type { ChatMessage, ClarificationRequest } from './types.ts'
 
@@ -18,6 +18,20 @@ const request: ClarificationRequest = {
 function user(id: string, clarificationId?: string): ChatMessage {
   return { id, role: 'user', content: 'Football equipment', createdAt: now, clarificationId }
 }
+
+test('withoutChat removes one chat and replaces the last remaining one', () => {
+  const first = createChat('chat-1', now)
+  const second = createChat('chat-2', now)
+  const replacement = createChat('chat-3', now)
+  const history: ChatHistory = { version: CHAT_STORAGE_VERSION, chats: [first, second], activeChatId: first.id }
+  const removed = withoutChat(history, first.id, replacement)
+  assert.deepEqual(removed.chats.map((chat) => chat.id), ['chat-2'])
+  assert.equal(removed.activeChatId, 'chat-2')
+  const emptied = withoutChat({ version: CHAT_STORAGE_VERSION, chats: [first], activeChatId: first.id }, first.id, replacement)
+  assert.deepEqual(emptied.chats, [replacement])
+  assert.equal(emptied.activeChatId, replacement.id)
+  assert.deepEqual(withOnlyChat(replacement).chats, [replacement])
+})
 
 test('createChat is deterministic and has no messages', () => {
   assert.deepEqual(createChat('chat-1', now), {

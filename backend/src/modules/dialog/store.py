@@ -54,6 +54,10 @@ class ConversationStore(Protocol):
 
     async def save(self, state: ConversationState) -> None: ...
 
+    async def delete(self, dialog_id: str) -> bool: ...
+
+    async def delete_all(self) -> int: ...
+
 
 class MemoryConversationStore:
     def __init__(self) -> None:
@@ -75,3 +79,11 @@ class MemoryConversationStore:
         state.updated_at = utcnow()
         state.revision += 1
         self._items[state.id] = state
+
+    async def delete(self, dialog_id: str) -> bool:
+        return self._items.pop(dialog_id, None) is not None
+
+    async def delete_all(self) -> int:
+        count = len(self._items)
+        self._items.clear()
+        return count

@@ -101,6 +101,13 @@ test('chatFromListItem and mergeRemoteDialog hydrate an empty appeal once', () =
   assert.equal(mergeRemoteDialog(hydrated, { id: item.id, reply: 'x', closed: false, messages: [{ role: 'user', content: 'other' }] }), hydrated)
 })
 
+test('mergeRemoteList drops backend chats when the server list is empty', () => {
+  const remote = createChat('64b7f2c1a1b2c3d4e5f60789', '2026-04-25T12:00:00.000Z')
+  const history: ChatHistory = { version: CHAT_STORAGE_VERSION, chats: [remote], activeChatId: remote.id }
+  const merged = mergeRemoteList(history, [])
+  assert.deepEqual(merged.chats, [])
+})
+
 test('dialog helpers recognize Mongo ids and not-found payloads', () => {
   assert.equal(isBackendDialogId('64b7f2c1a1b2c3d4e5f60789'), true)
   assert.equal(isBackendDialogId('chat-local-id'), false)

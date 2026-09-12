@@ -71,3 +71,7 @@ class DialogMessage(BaseSchema):
 
 class DialogView(DialogResponse):
     messages: list[DialogMessage] = Field(default_factory=list)
+
+
+class DialogDeleteResult(BaseSchema):
+    deleted: int

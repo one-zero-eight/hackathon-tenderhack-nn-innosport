@@ -166,7 +166,17 @@ export function mergeRemoteList(history: ChatHistory, items: readonly SchemaDial
   const remoteIds = new Set(items.map((item) => item.id))
   const localDraft = history.chats.find((chat) => !isBackendDialogId(chat.id) && !remoteIds.has(chat.id) && chat.id === history.activeChatId && chat.messages.length === 0)
   const chats = [...(localDraft ? [localDraft] : []), ...remoteChats].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-  if (chats.length === 0) return history
+  if (chats.length === 0) {
+    const locals = history.chats.filter((chat) => !isBackendDialogId(chat.id))
+    if (locals.length === 0) {
+      return history.chats.length === 0 ? history : { ...history, chats: [], activeChatId: history.activeChatId }
+    }
+    const activeChatId = locals.some((chat) => chat.id === history.activeChatId) ? history.activeChatId : locals[0].id
+    if (history.activeChatId === activeChatId && history.chats.length === locals.length && history.chats.every((chat, index) => sameChat(chat, locals[index]))) {
+      return history
+    }
+    return { ...history, chats: locals, activeChatId }
+  }
   const activeChatId = chats.some((chat) => chat.id === history.activeChatId) ? history.activeChatId : chats[0].id
   if (history.activeChatId === activeChatId && history.chats.length === chats.length && history.chats.every((chat, index) => sameChat(chat, chats[index]))) {
     return history

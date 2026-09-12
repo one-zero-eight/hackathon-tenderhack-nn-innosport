@@ -38,6 +38,8 @@ export function useApiTransport(): ChatTransport {
   const { mutateAsync: createDialog } = $api.useMutation('post', '/dialogs')
   const { mutateAsync: postMessage } = $api.useMutation('post', '/dialogs/{dialog_id}/messages')
   const { mutateAsync: escalate } = $api.useMutation('post', '/dialogs/{dialog_id}/escalate')
+  const { mutateAsync: deleteDialog } = $api.useMutation('delete', '/dialogs/{dialog_id}')
+  const { mutateAsync: deleteDialogs } = $api.useMutation('delete', '/dialogs')
 
   return useMemo<ChatTransport>(
     () => {
@@ -71,8 +73,23 @@ export function useApiTransport(): ChatTransport {
             throw error
           }
         },
+        delete: async (chatId, signal) => {
+          if (!isBackendDialogId(chatId)) return
+          try {
+            await deleteDialog({ params: { path: { dialog_id: chatId } }, signal })
+          } catch (error) {
+            if (!isDialogNotFound(error)) throw error
+          }
+          queryClient.setQueriesData({ queryKey: ['api', 'get', '/dialogs'] }, (current) => (Array.isArray(current) ? current.filter((item) => item && typeof item === 'object' && 'id' in item && item.id !== chatId) : current))
+          invalidateDialogs()
+        },
+        deleteAll: async (signal) => {
+          await deleteDialogs({ signal })
+          queryClient.setQueriesData({ queryKey: ['api', 'get', '/dialogs'] }, () => [])
+          invalidateDialogs()
+        },
       }
     },
-    [createDialog, escalate, postMessage, queryClient],
+    [createDialog, deleteDialog, deleteDialogs, escalate, postMessage, queryClient],
   )
 }

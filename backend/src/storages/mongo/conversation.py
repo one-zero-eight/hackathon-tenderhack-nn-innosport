@@ -156,6 +156,17 @@ class MongoConversationStore:
             raise ConversationConflictError(state.id)
         state.revision += 1
 
+    async def delete(self, dialog_id: str) -> bool:
+        object_id = self._object_id(dialog_id)
+        if object_id is None:
+            return False
+        result = await Conversation.get_motor_collection().delete_one({"_id": object_id})
+        return result.deleted_count == 1
+
+    async def delete_all(self) -> int:
+        result = await Conversation.get_motor_collection().delete_many({})
+        return int(result.deleted_count)
+
     @staticmethod
     def _object_id(value: str) -> PydanticObjectId | None:
         if re.fullmatch(r"[0-9a-fA-F]{24}", value) is None:

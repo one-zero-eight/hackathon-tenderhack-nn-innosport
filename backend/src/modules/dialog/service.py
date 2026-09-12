@@ -15,6 +15,7 @@ from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_reply
 from src.modules.dialog.routing import is_l2_request
 from src.modules.dialog.schemas import (
     Citation,
+    DialogDeleteResult,
     DialogListItem,
     DialogMessage,
     DialogResponse,
@@ -72,6 +73,14 @@ class DialogService:
 
     async def list_dialogs(self, *, limit: int = 100) -> list[DialogListItem]:
         return [self._list_item(state) for state in await self.store.list(limit=limit)]
+
+    async def delete(self, dialog_id: str) -> DialogDeleteResult:
+        if not await self.store.delete(dialog_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dialog not found")
+        return DialogDeleteResult(deleted=1)
+
+    async def delete_all(self) -> DialogDeleteResult:
+        return DialogDeleteResult(deleted=await self.store.delete_all())
 
     async def add_message(self, dialog_id: str, content: str) -> DialogResponse:
         state = await self._require(dialog_id)

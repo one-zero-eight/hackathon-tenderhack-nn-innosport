@@ -16,6 +16,17 @@ export function createChat(id: string, now: string): Chat {
   return { id, title: 'Новое обращение', updatedAt: now, messages: [], status: 'open', feedbackDismissed: false }
 }
 
+/** Drop one chat and keep the UI on another existing chat or the supplied replacement. */
+export function withoutChat(history: ChatHistory, id: string, replacement: Chat): ChatHistory {
+  const chats = history.chats.filter((chat) => chat.id !== id)
+  if (chats.length === 0) return { ...history, chats: [replacement], activeChatId: replacement.id }
+  return { ...history, chats, activeChatId: history.activeChatId === id ? chats[0].id : history.activeChatId }
+}
+
+export function withOnlyChat(replacement: Chat): ChatHistory {
+  return { version: CHAT_STORAGE_VERSION, chats: [replacement], activeChatId: replacement.id }
+}
+
 /** Unknown/legacy text, notices, questions and handoff confirmations are not answers. */
 export function isSubstantiveAnswer(message: ChatMessage): boolean {
   return message.role === 'assistant' && message.kind === 'answer' && message.content.trim().length > 0

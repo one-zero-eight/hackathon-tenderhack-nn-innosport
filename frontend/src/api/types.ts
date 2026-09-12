@@ -16,7 +16,8 @@ export interface paths {
         put?: never;
         /** Create Dialog */
         post: operations["create_dialog_dialogs_post"];
-        delete?: never;
+        /** Delete Dialogs */
+        delete: operations["delete_dialogs_dialogs_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -33,7 +34,8 @@ export interface paths {
         get: operations["get_dialog_dialogs__dialog_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Dialog */
+        delete: operations["delete_dialog_dialogs__dialog_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -88,6 +90,11 @@ export interface components {
             section: string;
             /** Path */
             path: string;
+        };
+        /** DialogDeleteResult */
+        DialogDeleteResult: {
+            /** Deleted */
+            deleted: number;
         };
         /** DialogListItem */
         DialogListItem: {
@@ -219,6 +226,7 @@ export interface components {
     pathItems: never;
 }
 export type SchemaCitation = components['schemas']['Citation'];
+export type SchemaDialogDeleteResult = components['schemas']['DialogDeleteResult'];
 export type SchemaDialogListItem = components['schemas']['DialogListItem'];
 export type SchemaDialogMessage = components['schemas']['DialogMessage'];
 export type SchemaDialogResponse = components['schemas']['DialogResponse'];
@@ -282,6 +290,26 @@ export interface operations {
             };
         };
     };
+    delete_dialogs_dialogs_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialogDeleteResult"];
+                };
+            };
+        };
+    };
     get_dialog_dialogs__dialog_id__get: {
         parameters: {
             query?: never;
@@ -300,6 +328,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DialogView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dialog_dialogs__dialog_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dialog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialogDeleteResult"];
                 };
             };
             /** @description Validation Error */

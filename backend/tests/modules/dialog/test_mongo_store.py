@@ -7,7 +7,9 @@ from src.storages.mongo.conversation import Conversation, MongoConversationStore
 
 
 async def test_mongo_store_rejects_malformed_id_without_query() -> None:
-    assert await MongoConversationStore().get("not-an-object-id") is None
+    store = MongoConversationStore()
+    assert await store.get("not-an-object-id") is None
+    assert await store.delete("not-an-object-id") is False
 
 
 async def test_mongo_store_uses_optimistic_revision(monkeypatch) -> None:

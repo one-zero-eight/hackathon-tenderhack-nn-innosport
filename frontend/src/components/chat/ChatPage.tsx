@@ -50,6 +50,13 @@ export default function ChatPage() {
         void chat.createChat()
         setLeftOpen(false)
       }}
+      busy={chat.mutating}
+      onDelete={(id) => {
+        void chat.deleteChat(id)
+      }}
+      onDeleteAll={() => {
+        void chat.deleteAllChats()
+      }}
     />
   )
   return (

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from src.api import docs
-from src.modules.dialog.schemas import DialogListItem, DialogResponse, DialogView, MessageCreate
+from src.modules.dialog.schemas import DialogDeleteResult, DialogListItem, DialogResponse, DialogView, MessageCreate
 from src.modules.dialog.service import DialogClosedError, DialogService
 
 router = APIRouter(tags=["dialog"])
@@ -38,9 +38,19 @@ async def list_dialogs(
     return await service.list_dialogs(limit=limit)
 
 
+@router.delete("/dialogs", response_model=DialogDeleteResult)
+async def delete_dialogs(service: DialogServiceDep) -> DialogDeleteResult:
+    return await service.delete_all()
+
+
 @router.get("/dialogs/{dialog_id}", response_model=DialogView)
 async def get_dialog(dialog_id: str, service: DialogServiceDep) -> DialogView:
     return await service.get(dialog_id)
+
+
+@router.delete("/dialogs/{dialog_id}", response_model=DialogDeleteResult)
+async def delete_dialog(dialog_id: str, service: DialogServiceDep) -> DialogDeleteResult:
+    return await service.delete(dialog_id)
 
 
 @router.post("/dialogs/{dialog_id}/messages", response_model=DialogResponse)
