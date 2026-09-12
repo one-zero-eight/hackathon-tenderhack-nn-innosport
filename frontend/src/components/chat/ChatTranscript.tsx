@@ -3,6 +3,7 @@ import { LuLoaderCircle, LuSparkles } from 'react-icons/lu'
 import type { Chat, ClarificationAnswer, ClarificationRequest } from '@/features/chat/types'
 import ChatOutline from './ChatOutline'
 import ClarificationCard from './ClarificationCard'
+import MarkdownMessage from './MarkdownMessage'
 
 export interface ChatTranscriptHandle {
   scrollToBottom: () => void
@@ -119,7 +120,11 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                       {new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                     </time>
                   </div>
-                  <div className={`text-ui-body leading-7 break-words whitespace-pre-wrap ${message.role === 'user' ? 'bg-surface-2 rounded-2xl rounded-tr-md px-5 py-3' : 'text-foreground/85'}`}>{message.content}</div>
+                  {message.role === 'assistant' ? (
+                    <MarkdownMessage content={message.content} />
+                  ) : (
+                    <div className="text-ui-body bg-surface-2 rounded-2xl rounded-tr-md px-5 py-3 leading-7 break-words whitespace-pre-wrap">{message.content}</div>
+                  )}
                   {message.kind === 'handoff' && chat.handoff?.simulated && <p className="text-foreground/45 text-ui-small mt-2">Демонстрация: реальная заявка не отправлена, связь со специалистом не установлена.</p>}
                   {message.clarification && (
                     <ClarificationCard request={message.clarification} answered={messages.some((item) => item.clarificationId === message.clarification?.id)} busy={busy} closed={chat.status === 'closed'} onAnswer={onAnswer} />
