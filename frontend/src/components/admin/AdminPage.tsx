@@ -4,7 +4,6 @@ import { $api } from '@/api'
 import Button from '@/components/ui/Button'
 import ChatTranscript from '@/components/chat/ChatTranscript'
 import { chatFromDialogView } from '@/features/chat/dialog-map'
-import AdminFeedbackPanel from './AdminFeedbackPanel'
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
@@ -29,7 +28,7 @@ export default function AdminPage() {
   return (
     <main className="bg-background text-foreground min-h-dvh p-4">
       <h1 className="sr-only">Админ-панель обращений</h1>
-      <div className="mx-auto grid max-w-[1600px] gap-4 xl:h-[calc(100dvh-2rem)] xl:grid-cols-[15rem_minmax(0,1fr)_20rem]">
+      <div className="mx-auto grid max-w-[1600px] gap-4 xl:h-[calc(100dvh-2rem)] xl:grid-cols-[15rem_minmax(0,1fr)]">
         <aside aria-labelledby="admin-appeals-title" className="border-border bg-surface flex min-h-0 flex-col overflow-hidden rounded-2xl border">
           <header className="border-border border-b px-4 py-4">
             <h2 id="admin-appeals-title" className="text-ui-title font-semibold">
@@ -94,7 +93,6 @@ export default function AdminPage() {
           )}
         </section>
 
-        <AdminFeedbackPanel />
       </div>
     </main>
   )
