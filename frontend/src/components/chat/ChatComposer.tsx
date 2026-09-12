@@ -25,7 +25,6 @@ export default function ChatComposer({ draft, onDraft, onSend, busy }: { draft: 
         value={draft}
         onChange={(event) => onDraft(event.target.value)}
         placeholder="Напишите ваш вопрос…"
-        disabled={busy}
         rows={2}
         maxLength={10000}
         className="text-ui-body min-h-16 border-0 bg-transparent px-3 py-2 focus-visible:ring-0"

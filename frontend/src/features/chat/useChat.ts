@@ -52,6 +52,7 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
   const [history, setHistory] = useState(loadHistory)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [busyChats, setBusyChats] = useState<Record<string, boolean>>({})
+  const [pendingMessages, setPendingMessages] = useState<Record<string, ChatMessage>>({})
   const [errors, setErrors] = useState<Record<string, string | null>>({})
   const historyRef = useRef(history)
   const draftsRef = useRef(drafts)
@@ -112,7 +113,18 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
 
   const syncList = useCallback(
     (items: readonly SchemaDialogListItem[]) => {
-      const next = mergeRemoteList(historyRef.current, items)
+      const current = historyRef.current
+      let next = mergeRemoteList(current, items)
+      // List refreshes must not remove or change a chat awaiting its reply.
+      const pending = current.chats.filter((chat) => operations.current.has(chat.id))
+      if (pending.length) {
+        const pendingIds = new Set(pending.map((chat) => chat.id))
+        next = {
+          ...next,
+          chats: [...pending, ...next.chats.filter((chat) => !pendingIds.has(chat.id))],
+          activeChatId: pendingIds.has(current.activeChatId) ? current.activeChatId : next.activeChatId,
+        }
+      }
       if (next.chats.length === 0) {
         commitHistory(withOnlyChat(createChat(newId(), new Date().toISOString())))
         return
@@ -157,6 +169,13 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
         content: content.trim(),
         createdAt: new Date().toISOString(),
       }
+      // Display the outgoing message without persisting an unconfirmed exchange.
+      setPendingMessages((current) => ({ ...current, [chatId]: userMessage }))
+      if (originalDraft.trim() === userMessage.content) {
+        const nextDrafts = { ...draftsRef.current, [chatId]: '' }
+        draftsRef.current = nextDrafts
+        setDrafts(nextDrafts)
+      }
       let remoteId = chatId
       try {
         const reply = await transport.send([...chat.messages, userMessage], controller.signal, chatId)
@@ -180,23 +199,31 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
             setDrafts(nextDrafts)
           }
         }
-        // Never erase text typed during the request, or another chat's composer.
-        if (originalDraft.trim() === content.trim() && (draftsRef.current[remoteId] ?? draftsRef.current[chatId] ?? '') === originalDraft) {
-          const nextDrafts = { ...draftsRef.current, [remoteId]: '' }
-          delete nextDrafts[chatId]
-          draftsRef.current = nextDrafts
-          setDrafts(nextDrafts)
-        }
         return true
       } catch {
         if (mounted.current && !controller.signal.aborted) {
+          // Restore the failed query without overwriting a newly typed draft.
+          const draft = draftsRef.current[chatId] ?? ''
+          const nextDrafts = { ...draftsRef.current, [chatId]: draft || originalDraft || content }
+          draftsRef.current = nextDrafts
+          setDrafts(nextDrafts)
           setErrors((current) => ({
             ...current,
-            [chatId]: 'Не удалось получить ответ. Ваш ввод сохранён — попробуйте ещё раз.',
+            [chatId]: draft
+              ? `Не удалось получить ответ на вопрос «${userMessage.content}». Новый черновик сохранён — повторите вопрос позже.`
+              : 'Не удалось получить ответ. Ваш ввод сохранён — попробуйте ещё раз.',
           }))
         }
         return false
       } finally {
+        if (mounted.current) {
+          setPendingMessages((current) => {
+            if (current[chatId]?.id !== userMessage.id) return current
+            const next = { ...current }
+            delete next[chatId]
+            return next
+          })
+        }
         if (operations.current.get(chatId) === controller || operations.current.get(remoteId) === controller) {
           operations.current.delete(chatId)
           operations.current.delete(remoteId)
@@ -338,9 +365,19 @@ export function useChat(transport: ChatTransport = demoTransport): UseChatResult
     }
   }, [commitHistory, transport])
 
-  const activeChat = history.chats.find((chat) => chat.id === history.activeChatId) ?? history.chats[0]
+  const chats = history.chats.map((chat) => {
+    const pending = pendingMessages[chat.id]
+    if (!pending) return chat
+    return {
+      ...chat,
+      title: chat.messages.some((message) => message.role === 'user') ? chat.title : pending.content.replace(/\s+/g, ' ').slice(0, 64),
+      updatedAt: pending.createdAt,
+      messages: [...chat.messages, pending],
+    }
+  })
+  const activeChat = chats.find((chat) => chat.id === history.activeChatId) ?? chats[0]
   return {
-    chats: history.chats,
+    chats,
     activeChat,
     activeChatId: activeChat.id,
     drafts,

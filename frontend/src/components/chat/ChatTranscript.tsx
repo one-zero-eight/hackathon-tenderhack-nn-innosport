@@ -20,18 +20,22 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const previousChat = useRef(chat.id)
+  const previousUserMessage = useRef<string | undefined>(undefined)
   const messages = chat.messages
+  const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.id
 
   useEffect(() => {
     const container = scrollRef.current
     if (!container) return
-    if (previousChat.current !== chat.id || stickToBottom.current) {
+    const submittedMessage = busy && latestUserMessage !== previousUserMessage.current
+    if (previousChat.current !== chat.id || submittedMessage || stickToBottom.current) {
       container.scrollTop = container.scrollHeight
       stickToBottom.current = true
       onNearBottomChange?.(true)
     }
     previousChat.current = chat.id
-  }, [chat.id, messages.length, busy, onNearBottomChange])
+    previousUserMessage.current = latestUserMessage
+  }, [chat.id, messages.length, latestUserMessage, busy, onNearBottomChange])
 
   useEffect(() => {
     const container = scrollRef.current
