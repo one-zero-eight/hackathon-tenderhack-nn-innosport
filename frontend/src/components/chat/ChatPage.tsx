@@ -168,7 +168,7 @@ export default function ChatPage() {
                     )}
                     <ChatStatusActions
                       closed={closed}
-                      busy={!isNewChat && chat.busy}
+                      busy={!isNewChat && chat.busy && !chat.generating}
                       latestAction={
                         !nearBottom && messages.length > 0 ? (
                           <Button variant="outline" size="sm" aria-label="К последнему сообщению" onClick={() => transcriptRef.current?.scrollToBottom()} className="bg-background flex items-center gap-2 rounded-full">

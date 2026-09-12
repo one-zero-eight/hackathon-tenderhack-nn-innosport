@@ -64,6 +64,7 @@ export interface UseChatResult {
   canFeedback: boolean
   canContactSpecialist: boolean
   busy: boolean
+  generating: boolean
   mutating: boolean
   error: string | null
 }
@@ -78,6 +79,7 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
   const historyRef = useRef(history)
   const draftsRef = useRef(drafts)
   const operations = useRef(new Map<string, AbortController>())
+  const generations = useRef(new Set<AbortController>())
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -198,6 +200,7 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
       if (suggestionId && (chat.suggestedRephrase?.id !== suggestionId || !pendingSuggestedRephraseMessageId(chat))) return false
       const controller = new AbortController()
       operations.current.set(chatId, controller)
+      generations.current.add(controller)
       setBusyChats((current) => ({ ...current, [chatId]: true }))
       setErrors((current) => ({ ...current, [chatId]: null }))
       const originalDraft = draftsRef.current[chatId] ?? ''
@@ -283,6 +286,7 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
         }
         return false
       } finally {
+        generations.current.delete(controller)
         if (mounted.current) {
           setStreamingMessages((current) => {
             if (current[chatId]?.id !== `${userMessage.id}:reply`) return current
@@ -339,7 +343,20 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
   const closeChat = useCallback(async (): Promise<boolean> => {
     const chatId = historyRef.current.activeChatId
     const chat = historyRef.current.chats.find((item) => item.id === chatId)
-    if (!chat || chat.status === 'closed' || operations.current.has(chatId)) return false
+    if (!chat || chat.status === 'closed') return false
+    const pending = operations.current.get(chatId)
+    if (pending && !generations.current.has(pending)) return false
+    pending?.abort()
+    setPendingMessages((messages) => {
+      const next = { ...messages }
+      delete next[chatId]
+      return next
+    })
+    setStreamingMessages((messages) => {
+      const next = { ...messages }
+      delete next[chatId]
+      return next
+    })
     const controller = new AbortController()
     operations.current.set(chatId, controller)
     setBusyChats((current) => ({ ...current, [chatId]: true }))
@@ -559,7 +576,8 @@ export function useChat(transport: ChatTransport = demoTransport, onActiveChatCh
     canFeedback: canFeedback(activeChat),
     canContactSpecialist: canContactSpecialist(activeChat),
     busy: busyChats[activeChat.id] ?? false,
-    mutating: Object.values(busyChats).some(Boolean),
+    generating: Boolean(pendingMessages[activeChat.id]),
+    mutating: Object.entries(busyChats).some(([id, busy]) => busy && !pendingMessages[id]),
     error: errors[activeChat.id] ?? null,
   }
 }
