@@ -48,3 +48,6 @@ line-length = 120
 lint.extend-select = ["I", "UP", "PL"]
 lint.extend-ignore = ["PLC0415", "PLR"]
 target-version = "py313"
+
+[tool.uv.workspace]
+members = ["ingest"]

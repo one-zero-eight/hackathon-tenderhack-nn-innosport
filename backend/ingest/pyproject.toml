@@ -1,0 +1,13 @@
+[project]
+name = "ingest"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [{ name = "mainStorne", email = "dbevzpr@mail.ru" }]
+requires-python = ">=3.14"
+dependencies = [
+    "ipykernel>=7.3.0",
+    "memvid-sdk[langchain]>=2.0.160",
+    "pymupdf>=1.28.2",
+    "pymupdf4llm>=1.28.2",
+]
