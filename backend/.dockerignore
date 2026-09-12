@@ -4,6 +4,8 @@
 # Except code
 !/src/
 !/data/
+!/scripts/docker-entrypoint.sh
+!/scripts/docker_sitecustomize.py
 !/pyproject.toml
 !/uv.lock
 
