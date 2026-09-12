@@ -11,7 +11,7 @@ router = APIRouter(tags=["dialog"])
 docs.TAGS_INFO.append(
     {
         "name": "dialog",
-        "description": "Диалоговые обращения в поддержку: одно обращение, история сообщений, L1/L2.",
+        "description": "Диалоговые обращения в поддержку: одно обращение, история сообщений, L1/L2/L3.",
     }
 )
 

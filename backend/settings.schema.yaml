@@ -73,6 +73,56 @@ $defs:
         type: number
     title: LlamaCppSettings
     type: object
+  MlxSettings:
+    additionalProperties: false
+    description: Optional local MLX server (mlx-vlm) for grounded answers.
+    properties:
+      base_url:
+        default: http://127.0.0.1:8083
+        description: OpenAI-compatible MLX server, e.g. http://127.0.0.1:8083 or http://host.docker.internal:8083
+        title: Base Url
+        type: string
+      model:
+        default: ''
+        description: Model name forwarded to /v1/chat/completions. Empty string lets
+          the MLX server use its loaded model.
+        title: Model
+        type: string
+      max_tool_rounds:
+        default: 2
+        description: Maximum knowledge tool rounds before the agent must respond
+        maximum: 8
+        minimum: 1
+        title: Max Tool Rounds
+        type: integer
+      answer_max_tokens:
+        default: 1024
+        description: Maximum output tokens for a natural-language support answer
+        exclusiveMinimum: 0
+        maximum: 8192
+        title: Answer Max Tokens
+        type: integer
+      context_tokens:
+        default: 2048
+        description: Approximate context budget used to compact the agent transcript
+        maximum: 131072
+        minimum: 1024
+        title: Context Tokens
+        type: integer
+      temperature:
+        default: 0.0
+        maximum: 2
+        minimum: 0
+        title: Temperature
+        type: number
+    title: MlxSettings
+    type: object
+  ModelProvider:
+    enum:
+    - llama_cpp
+    - mlx
+    title: ModelProvider
+    type: string
 additionalProperties: false
 description: Settings for the application.
 properties:
@@ -114,10 +164,18 @@ properties:
   knowledge_search:
     $ref: '#/$defs/KnowledgeSearchSettings'
     description: Local semantic retrieval configuration
+  model_provider:
+    $ref: '#/$defs/ModelProvider'
+    default: llama_cpp
+    description: 'Local answer generator: llama_cpp or mlx. The API never calls OpenAI/Gemini/Claude.'
   llama_cpp:
     $ref: '#/$defs/LlamaCppSettings'
-    description: Local llama.cpp answer generator. Disabled by default; the API never
-      calls OpenAI/Gemini/Claude.
+    description: llama.cpp server used when model_provider is llama_cpp. Disabled
+      by default.
+  mlx:
+    $ref: '#/$defs/MlxSettings'
+    description: MLX server used when model_provider is mlx. Run scripts/start_mlx_server.sh
+      on the Mac host.
 required:
 - database_uri
 title: Settings

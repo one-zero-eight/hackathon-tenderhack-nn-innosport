@@ -10,6 +10,11 @@ class Environment(StrEnum):
     PRODUCTION = "production"
 
 
+class ModelProvider(StrEnum):
+    LLAMA_CPP = "llama_cpp"
+    MLX = "mlx"
+
+
 class SettingBaseModel(BaseModel):
     model_config = ConfigDict(use_attribute_docstrings=True, extra="forbid")
 
@@ -29,6 +34,22 @@ class LlamaCppSettings(SettingBaseModel):
     "Maximum output tokens for a natural-language support answer"
     context_tokens: int = Field(default=2048, ge=1024, le=131072)
     "Context budget per server slot; must not exceed llama.cpp --ctx-size / --parallel"
+    temperature: float = Field(default=0.0, ge=0, le=2)
+
+
+class MlxSettings(SettingBaseModel):
+    """Optional local MLX server (mlx-vlm) for grounded answers."""
+
+    base_url: str = "http://127.0.0.1:8083"
+    "OpenAI-compatible MLX server, e.g. http://127.0.0.1:8083 or http://host.docker.internal:8083"
+    model: str = ""
+    "Model name forwarded to /v1/chat/completions. Empty string lets the MLX server use its loaded model."
+    max_tool_rounds: int = Field(default=2, ge=1, le=8)
+    "Maximum knowledge tool rounds before the agent must respond"
+    answer_max_tokens: int = Field(default=1024, gt=0, le=8192)
+    "Maximum output tokens for a natural-language support answer"
+    context_tokens: int = Field(default=2048, ge=1024, le=131072)
+    "Approximate context budget used to compact the agent transcript"
     temperature: float = Field(default=0.0, ge=0, le=2)
 
 
@@ -62,8 +83,12 @@ class Settings(SettingBaseModel):
     "Path to the teammate-produced vector Memvid knowledge base"
     knowledge_search: KnowledgeSearchSettings = Field(default_factory=KnowledgeSearchSettings)
     "Local semantic retrieval configuration"
+    model_provider: ModelProvider = ModelProvider.LLAMA_CPP
+    "Local answer generator: llama_cpp or mlx. The API never calls OpenAI/Gemini/Claude."
     llama_cpp: LlamaCppSettings = Field(default_factory=LlamaCppSettings)
-    "Local llama.cpp answer generator. Disabled by default; the API never calls OpenAI/Gemini/Claude."
+    "llama.cpp server used when model_provider is llama_cpp. Disabled by default."
+    mlx: MlxSettings = Field(default_factory=MlxSettings)
+    "MLX server used when model_provider is mlx. Run scripts/start_mlx_server.sh on the Mac host."
 
     @classmethod
     def from_yaml(cls, path: Path) -> Settings:

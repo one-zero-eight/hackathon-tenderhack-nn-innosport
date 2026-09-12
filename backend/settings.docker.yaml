@@ -5,11 +5,19 @@ database_uri: mongodb://mongoadmin:secret@database:27017/db?authSource=admin
 knowledge_memvid_path: data/knowledge.mv2
 knowledge_search:
   embedding_model: mxbai-embed-large
-  ollama_base_url: http://100.70.231.112:11434
+  ollama_base_url: http://host.docker.internal:11434
+model_provider: llama_cpp # llama_cpp | mlx
 llama_cpp:
   enabled: true
-  base_url: http://100.70.231.112:8001
-  model: ''
+  base_url: http://host.docker.internal:8081
+  model: qwen3.5-4b
+  max_tool_rounds: 2
+  answer_max_tokens: 1024
+  context_tokens: 2048
+  temperature: 0
+mlx:
+  base_url: http://host.docker.internal:8083
+  model: gemma-4-e2b-it-4bit
   max_tool_rounds: 2
   answer_max_tokens: 1024
   context_tokens: 2048

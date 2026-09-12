@@ -6,10 +6,18 @@ knowledge_memvid_path: data/knowledge.mv2
 knowledge_search:
   embedding_model: mxbai-embed-large
   ollama_base_url: http://127.0.0.1:11434
+model_provider: llama_cpp # llama_cpp | mlx
 llama_cpp:
   enabled: false
   base_url: http://127.0.0.1:8080
   model: ''
+  max_tool_rounds: 2
+  answer_max_tokens: 1024
+  context_tokens: 2048
+  temperature: 0
+mlx:
+  base_url: http://127.0.0.1:8083
+  model: gemma-4-e2b-it-4bit
   max_tool_rounds: 2
   answer_max_tokens: 1024
   context_tokens: 2048

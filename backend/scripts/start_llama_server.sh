@@ -12,15 +12,12 @@ if [[ ! -f "$PRESET" ]]; then
   exit 1
 fi
 
-if [[ "$(uname -m)" == "arm64" ]]; then
-  NATIVE="$(find "$ROOT/.tools/llama.cpp" -type f -name llama-server -print -quit 2>/dev/null || true)"
-  if [[ -n "$NATIVE" ]]; then
-    SERVER="$NATIVE"
-  else
-    SERVER="$(command -v llama-server)"
-  fi
+# Prefer the repo macos-arm64 build. `uname -m` can be x86_64 under Rosetta.
+NATIVE="$(find "$ROOT/.tools/llama.cpp" -type f -name llama-server -print -quit 2>/dev/null || true)"
+if [[ -n "$NATIVE" ]]; then
+  SERVER="$NATIVE"
 else
-  SERVER="$(command -v llama-server)"
+  SERVER="$(command -v llama-server || true)"
 fi
 
 if [[ -z "${SERVER:-}" || ! -x "$SERVER" ]]; then

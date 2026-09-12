@@ -2,15 +2,30 @@ from pathlib import Path
 
 from memvid_sdk.embeddings import OllamaEmbeddings
 
+from src.config_schema import ModelProvider, Settings
 from src.modules.dialog.llama import DialogLlamaClient, LlamaCppClient, NullLlamaClient
 from src.modules.dialog.retrieval import KnowledgeRetriever, MemvidKnowledgeRetriever
 from src.modules.dialog.service import DialogService
 from src.modules.dialog.store import ConversationStore, MemoryConversationStore
 
 
-def build_llama_client_from_settings() -> DialogLlamaClient:
-    from src.config import settings
+def build_llama_client_from_settings(settings: Settings | None = None) -> DialogLlamaClient:
+    if settings is None:
+        from src.config import settings as loaded
 
+        settings = loaded
+
+    if settings.model_provider is ModelProvider.MLX:
+        mlx = settings.mlx
+        return LlamaCppClient(
+            base_url=mlx.base_url,
+            model=mlx.model,
+            answer_max_tokens=mlx.answer_max_tokens,
+            context_tokens=mlx.context_tokens,
+            max_tool_rounds=mlx.max_tool_rounds,
+            temperature=mlx.temperature,
+            llama_extensions=False,
+        )
     llama = settings.llama_cpp
     if not llama.enabled:
         return NullLlamaClient()

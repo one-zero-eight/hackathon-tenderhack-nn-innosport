@@ -3,6 +3,7 @@ settings.yaml
 static
 *.parquet
 models/*.gguf
+models/mlx/
 .tools/
 
 # Created by https://www.toptal.com/developers/gitignore/api/vs,pycharm+all,python,macos

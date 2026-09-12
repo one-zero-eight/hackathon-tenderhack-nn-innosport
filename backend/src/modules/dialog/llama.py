@@ -107,6 +107,7 @@ class LlamaCppClient:
         context_tokens: int = 2048,
         temperature: float = 0.0,
         max_tool_rounds: int = 2,
+        llama_extensions: bool = True,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -114,6 +115,7 @@ class LlamaCppClient:
         self.context_tokens = context_tokens
         self.temperature = temperature
         self.max_tool_rounds = max_tool_rounds
+        self.llama_extensions = llama_extensions
         # Deliberately wait for the local model; the agent still has a step limit.
         self._client = httpx.AsyncClient(timeout=None)  # noqa: S113
 
@@ -243,35 +245,8 @@ class LlamaCppClient:
             ]
         }
         wire_messages = _action_messages(messages, tools)
-        # Count the actual rendered template once, not a tokenizer retry loop.
-        template = await self._client.post(
-            f"{self.base_url}/apply-template",
-            json={"model": self.model, "messages": wire_messages, "add_generation_prompt": True},
-        )
-        template.raise_for_status()
-        try:
-            prompt = template.json()["prompt"]
-            if not isinstance(prompt, str):
-                return None
-        except ValueError, KeyError, TypeError:
-            return None
-        tokenized = await self._client.post(
-            f"{self.base_url}/tokenize",
-            json={"model": self.model, "content": prompt, "add_special": True, "parse_special": True},
-        )
-        tokenized.raise_for_status()
-        try:
-            tokens = tokenized.json()["tokens"]
-            if not isinstance(tokens, list):
-                return None
-        except ValueError, KeyError, TypeError:
-            return None
-        available = self.context_tokens - len(tokens) - 32
-        if available < 256:
-            logger.warning("Agent context exhausted: prompt_tokens=%d context=%d", len(tokens), self.context_tokens)
-            return None
-        output_tokens = min(self.answer_max_tokens, available)
-        payload = {
+        output_tokens = self.answer_max_tokens
+        payload: dict = {
             "model": self.model,
             "messages": wire_messages,
             "response_format": {
@@ -285,10 +260,47 @@ class LlamaCppClient:
             "temperature": self.temperature,
             "max_tokens": output_tokens,
         }
+        if self.llama_extensions:
+            # Qwen 3.5 spends the output budget on reasoning_content unless thinking is off.
+            template_kwargs = {"enable_thinking": False}
+            # Count the actual rendered template once, not a tokenizer retry loop.
+            template = await self._client.post(
+                f"{self.base_url}/apply-template",
+                json={
+                    "model": self.model,
+                    "messages": wire_messages,
+                    "add_generation_prompt": True,
+                    "chat_template_kwargs": template_kwargs,
+                },
+            )
+            template.raise_for_status()
+            try:
+                prompt = template.json()["prompt"]
+                if not isinstance(prompt, str):
+                    return None
+            except ValueError, KeyError, TypeError:
+                return None
+            tokenized = await self._client.post(
+                f"{self.base_url}/tokenize",
+                json={"model": self.model, "content": prompt, "add_special": True, "parse_special": True},
+            )
+            tokenized.raise_for_status()
+            try:
+                tokens = tokenized.json()["tokens"]
+                if not isinstance(tokens, list):
+                    return None
+            except ValueError, KeyError, TypeError:
+                return None
+            available = self.context_tokens - len(tokens) - 32
+            if available < 256:
+                logger.warning("Agent context exhausted: prompt_tokens=%d context=%d", len(tokens), self.context_tokens)
+                return None
+            payload["max_tokens"] = min(self.answer_max_tokens, available)
+            payload["chat_template_kwargs"] = template_kwargs
         started = tm.monotonic()
         response = await self._client.post(f"{self.base_url}/v1/chat/completions", json=payload)
         if response.status_code == 400:
-            logger.warning("Agent request rejected by llama.cpp: %s", response.text[:500])
+            logger.warning("Agent request rejected by model server: %s", response.text[:500])
         response.raise_for_status()
         try:
             data = response.json()
