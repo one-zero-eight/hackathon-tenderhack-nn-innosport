@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { normalizeMarkdownTables } from '../../features/chat/normalize-markdown.ts'
 
 /** Render assistant Markdown without executing raw HTML or loading remote images. */
 export default function MarkdownMessage({ content }: { content: string }) {
@@ -26,7 +27,7 @@ export default function MarkdownMessage({ content }: { content: string }) {
         '[&_input]:mr-2 [&_input]:accent-primary [&_.contains-task-list]:list-none',
     },
     createElement(ReactMarkdown, {
-      children: content,
+      children: normalizeMarkdownTables(content),
       remarkPlugins: [remarkGfm],
       skipHtml: true,
       disallowedElements: ['img'],

@@ -6,10 +6,10 @@ knowledge_dir: data
 knowledge_memvid_path: data/knowledge.mv2
 knowledge_search:
   embedding_model: mxbai-embed-large
-  ollama_base_url: http://host.docker.internal:11434
+  ollama_base_url: http://100.70.231.112:11434
 llama_cpp:
   enabled: true
-  base_url: http://host.docker.internal:8081
+  base_url: http://100.70.231.112:8001
   model: ''
   timeout_seconds: 45
   max_tokens: 24

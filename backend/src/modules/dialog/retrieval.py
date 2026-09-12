@@ -1,5 +1,6 @@
 import asyncio
 import re
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -26,6 +27,76 @@ MIN_RETRIEVAL_SCORE = 2.2
 def _sentences(text: str) -> list[str]:
     parts = [re.sub(r"\s+", " ", part).strip() for part in SENTENCE_RE.split(text)]
     return [part for part in parts if len(part) >= 25]
+
+
+def _pipe_cells(line: str) -> list[str] | None:
+    """Split Markdown cells on unescaped pipes, including optional outer pipes."""
+    if line.startswith(("    ", "\t")):
+        return None
+    line = line.strip()
+    separators: list[int] = []
+    escaped = False
+    for index, character in enumerate(line):
+        if character == "|" and not escaped:
+            separators.append(index)
+        escaped = character == "\\" and not escaped
+    if not separators:
+        return None
+    boundaries = [-1, *separators, len(line)]
+    cells = [line[start + 1 : end].strip() for start, end in pairwise(boundaries)]
+    if separators[0] == 0:
+        cells.pop(0)
+    if separators[-1] == len(line) - 1:
+        cells.pop()
+    return cells
+
+
+def _reply_units(text: str) -> list[tuple[str, bool]]:
+    """Keep pipe tables whole before normalizing or splitting prose sentences."""
+    lines = text.splitlines()
+    units: list[tuple[str, bool]] = []
+    prose: list[str] = []
+
+    def flush_prose() -> None:
+        paragraph = "\n".join(prose).strip()
+        if paragraph:
+            sentences = _sentences(paragraph) or [re.sub(r"\s+", " ", paragraph)]
+            units.extend((sentence, False) for sentence in sentences)
+        prose.clear()
+
+    index = 0
+    fence: str | None = None
+    while index < len(lines):
+        line = lines[index]
+        fence_match = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence_match:
+            marker = fence_match.group(1)
+            if fence is None:
+                fence = marker
+            elif marker[0] == fence[0] and len(marker) >= len(fence):
+                fence = None
+        header = _pipe_cells(line) if fence is None else None
+        delimiter = _pipe_cells(lines[index + 1]) if index + 1 < len(lines) else None
+        if (
+            header
+            and delimiter
+            and len(header) == len(delimiter)
+            and all(re.fullmatch(r":?-+:?", cell) for cell in delimiter)
+        ):
+            flush_prose()
+            end = index + 2
+            while end < len(lines) and _pipe_cells(lines[end]):
+                end += 1
+            units.append(("\n".join(lines[index:end]).strip(), True))
+            index = end
+        else:
+            if line.strip():
+                prose.append(line)
+            else:
+                flush_prose()
+            index += 1
+    flush_prose()
+    return units
 
 
 def score_chunk(query: str, chunk: Chunk) -> float:
@@ -153,27 +224,38 @@ def _hit_to_chunk(hit: dict[str, Any], topic: Topic) -> Chunk | None:
 
 
 def extractive_reply(query: str, chunks: list[Chunk], limit: int = 900) -> str:
+    """Rank sentences and whole tables, returning blank-line-separated paragraphs.
+
+    The character budget includes paragraph separators. Tables that do not fit
+    are omitted (even if that leaves an empty reply); only prose may be clipped.
+    """
+    if limit <= 0:
+        return ""
     query_stems = set(significant_stems(query))
     selected: list[str] = []
     seen: set[str] = set()
+    used = 0
     for chunk in chunks:
-        sentences = _sentences(chunk.text)
+        units = _reply_units(chunk.text)
         ranked = sorted(
-            sentences,
-            key=lambda sentence: len(query_stems & set(significant_stems(sentence))),
+            range(len(units)),
+            key=lambda index: len(query_stems & set(significant_stems(units[index][0]))),
             reverse=True,
         )
-        ordered = [sentence for sentence in sentences if sentence in ranked[:3]]
-        if not ordered:
-            ordered = sentences[:2] or [chunk.text]
-        for sentence in ordered:
-            if sentence in seen:
+        for index in sorted(ranked[:3]):
+            text, is_table = units[index]
+            if text in seen:
                 continue
-            seen.add(sentence)
-            selected.append(sentence)
-            if sum(len(item) for item in selected) >= limit:
-                break
-        if sum(len(item) for item in selected) >= limit:
-            break
-    text = " ".join(selected).strip()
-    return text[:limit].rstrip()
+            seen.add(text)
+            separator_size = 2 if selected else 0
+            remaining = limit - used - separator_size
+            if remaining <= 0:
+                return "\n\n".join(selected)
+            if len(text) > remaining:
+                if is_table:
+                    continue
+                selected.append(text[:remaining].rstrip())
+                return "\n\n".join(selected)
+            selected.append(text)
+            used += separator_size + len(text)
+    return "\n\n".join(selected)
