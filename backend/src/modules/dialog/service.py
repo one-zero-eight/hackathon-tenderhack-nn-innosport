@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 
 from src.logging_ import logger
 from src.modules.dialog.abuse import has_profanity_or_insult, has_working_request, scan_abuse, usable_rephrase
-from src.modules.dialog.classify import is_capability_question, is_greeting, is_thanks
+from src.modules.dialog.classify import is_capability_question, is_greeting, is_thanks, reports_ui_defect
 from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient, TextCallback, ToolCallback, as_user_message
 from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_answer
 from src.modules.dialog.schemas import (
@@ -296,6 +296,43 @@ class DialogService:
                 line=None,
             )
 
+        if pending is None and is_greeting(text):
+            return self._finish(
+                state,
+                reply=GREETING_REPLY,
+                status=DialogStatus.CLARIFYING,
+                closed=False,
+                reason=None,
+                line=None,
+            )
+        if pending is None and is_capability_question(text):
+            return self._finish(
+                state,
+                reply=CAPABILITIES_REPLY,
+                status=DialogStatus.CLARIFYING,
+                closed=False,
+                reason=None,
+                line=None,
+            )
+        if pending is None and is_thanks(text):
+            return self._finish(
+                state,
+                reply="Пожалуйста! Обращайтесь, если появятся вопросы.",
+                status=DialogStatus.CLARIFYING,
+                closed=False,
+                reason=None,
+                line=None,
+            )
+        if pending is None and reports_ui_defect(text):
+            return self._finish(
+                state,
+                reply=NO_KNOWLEDGE_REPLY,
+                status=DialogStatus.ESCALATE,
+                closed=False,
+                reason="no_knowledge",
+                line=None,
+            )
+
         history = [(item.role, item.content) for item in state.messages]
         agent_question = text
         if pending is not None:
@@ -394,13 +431,23 @@ class DialogService:
                     clarification=clarification,
                     tool_calls=tool_calls,
                 )
+            if generated.kind == "no_knowledge":
+                return self._finish(
+                    state,
+                    reply=NO_KNOWLEDGE_REPLY,
+                    status=DialogStatus.ESCALATE,
+                    closed=False,
+                    reason="no_knowledge",
+                    line=None,
+                    tool_calls=tool_calls,
+                )
             if generated.kind != "answer":
                 return self._finish(
                     state,
                     reply=generated.text,
-                    status=DialogStatus.ESCALATE if generated.kind == "no_knowledge" else DialogStatus.CLARIFYING,
+                    status=DialogStatus.CLARIFYING,
                     closed=False,
-                    reason="no_knowledge" if generated.kind == "no_knowledge" else None,
+                    reason=None,
                     line=None,
                     tool_calls=tool_calls,
                 )

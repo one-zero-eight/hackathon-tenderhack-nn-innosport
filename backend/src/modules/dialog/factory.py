@@ -21,6 +21,18 @@ def build_llama_client_from_settings(settings: Settings | None = None) -> Dialog
 
         settings = loaded
 
+    llama = settings.llama_cpp
+    # L1/L2 is a tiny JSON label. Qwen with thinking off beats Gemma; never enable thinking here.
+    line_kwargs = (
+        {
+            "line_base_url": llama.base_url,
+            "line_model": llama.model,
+            "line_llama_extensions": True,
+        }
+        if llama.enabled
+        else {}
+    )
+
     if settings.model_provider is ModelProvider.MLX:
         mlx = settings.mlx
         return LlamaCppClient(
@@ -30,10 +42,11 @@ def build_llama_client_from_settings(settings: Settings | None = None) -> Dialog
             context_tokens=mlx.context_tokens,
             max_tool_rounds=mlx.max_tool_rounds,
             temperature=mlx.temperature,
+            enable_thinking=mlx.enable_thinking,
             llama_extensions=False,
             line_examples=_line_examples(),
+            **line_kwargs,
         )
-    llama = settings.llama_cpp
     if not llama.enabled:
         return NullLlamaClient()
     return LlamaCppClient(
@@ -43,7 +56,9 @@ def build_llama_client_from_settings(settings: Settings | None = None) -> Dialog
         context_tokens=llama.context_tokens,
         max_tool_rounds=llama.max_tool_rounds,
         temperature=llama.temperature,
+        enable_thinking=llama.enable_thinking,
         line_examples=_line_examples(),
+        **line_kwargs,
     )
 
 

@@ -18,19 +18,21 @@ audit:
     recipient: null
     send_at: '09:00:00'
     timezone: Europe/Moscow
-model_provider: llama_cpp # llama_cpp | mlx
+model_provider: mlx # answers/abuse on MLX; L1/L2 stays on llama.cpp
 llama_cpp:
   enabled: true
   base_url: http://host.docker.internal:8081
   model: qwen3.5-4b
   max_tool_rounds: 2
   answer_max_tokens: 1024
-  context_tokens: 2048
+  context_tokens: 4096
   temperature: 0
+  enable_thinking: false
 mlx:
   base_url: http://host.docker.internal:8083
   model: gemma-4-e2b-it-4bit
   max_tool_rounds: 2
   answer_max_tokens: 1024
-  context_tokens: 2048
+  context_tokens: 4096
   temperature: 0
+  enable_thinking: false

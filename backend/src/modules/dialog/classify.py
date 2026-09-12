@@ -44,3 +44,14 @@ def is_thanks(text: str) -> bool:
 def is_greeting(text: str) -> bool:
     tokens = tokenize(text)
     return bool(tokens) and len(tokens) <= 3 and all(token in GREETING_TOKENS for token in tokens)
+
+
+UI_DEFECT_RE = re.compile(
+    r"нет\s+кнопк|кнопк\w*.{0,80}нет|пропал\w*\s+кнопк|страниц\w*\s+пад|форма\s+пад|"
+    r"исправьте\s+форм",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def reports_ui_defect(text: str) -> bool:
+    return bool(UI_DEFECT_RE.search(text))

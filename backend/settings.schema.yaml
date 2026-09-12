@@ -151,6 +151,12 @@ $defs:
         minimum: 0
         title: Temperature
         type: number
+      enable_thinking:
+        default: false
+        description: 'Native thinking channel for answers/abuse. Leave false: Qwen
+          3.5 spends the token budget on thoughts and never finishes JSON.'
+        title: Enable Thinking
+        type: boolean
     title: LlamaCppSettings
     type: object
   MlxSettings:
@@ -195,6 +201,12 @@ $defs:
         minimum: 0
         title: Temperature
         type: number
+      enable_thinking:
+        default: false
+        description: Native thinking channel for answers/abuse. Gemma ignores this;
+          quality uses the in-schema reason field.
+        title: Enable Thinking
+        type: boolean
     title: MlxSettings
     type: object
   ModelProvider:

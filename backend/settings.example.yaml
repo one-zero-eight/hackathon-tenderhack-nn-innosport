@@ -27,6 +27,7 @@ llama_cpp:
   answer_max_tokens: 1024
   context_tokens: 2048
   temperature: 0
+  enable_thinking: false
 mlx:
   base_url: http://127.0.0.1:8083
   model: gemma-4-e2b-it-4bit
@@ -34,3 +35,4 @@ mlx:
   answer_max_tokens: 1024
   context_tokens: 2048
   temperature: 0
+  enable_thinking: false

@@ -38,6 +38,8 @@ class LlamaCppSettings(SettingBaseModel):
     context_tokens: int = Field(default=2048, ge=1024, le=131072)
     "Context budget per server slot; must not exceed llama.cpp --ctx-size / --parallel"
     temperature: float = Field(default=0.0, ge=0, le=2)
+    enable_thinking: bool = False
+    "Native thinking channel for answers/abuse. Leave false: Qwen 3.5 spends the token budget on thoughts and never finishes JSON."
 
 
 class MlxSettings(SettingBaseModel):
@@ -54,6 +56,8 @@ class MlxSettings(SettingBaseModel):
     context_tokens: int = Field(default=2048, ge=1024, le=131072)
     "Approximate context budget used to compact the agent transcript"
     temperature: float = Field(default=0.0, ge=0, le=2)
+    enable_thinking: bool = False
+    "Native thinking channel for answers/abuse. Gemma ignores this; quality uses the in-schema reason field."
 
 
 class AuditEmailSettings(SettingBaseModel):
