@@ -1,4 +1,7 @@
 .env
+models/ms-marco-MultiBERT-L-12
+__MACOSX
+.ms-marco-MultiBERT-L-12
 settings.yaml
 static
 *.parquet

@@ -6,8 +6,10 @@ from pathlib import PurePosixPath
 from typing import Any, Protocol
 
 from beanie import PydanticObjectId
+from flashrank import RerankRequest
 
 from src.logging_ import logger
+from src.modules.dataset.reranker import reranker_repository
 from src.modules.dialog.embeddings import OllamaEmbeddings
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import ABBREVIATIONS, normalize_text, root_ru, significant_stems
@@ -198,6 +200,22 @@ def _object_id(value: str) -> PydanticObjectId | None:
     return PydanticObjectId(value)
 
 
+def _local_semantic_score(query_vector: list[float], doc: dict[str, Any]) -> float:
+    """Local reranker: true cosine similarity against the query embedding,
+    computed in Python rather than trusting $vectorSearch's rank position -
+    this also gives text-search-only candidates (which never went through
+    $vectorSearch) a real semantic score instead of an arbitrary rank floor."""
+    embedding = doc.get("embedding")
+    if not embedding:
+        return 0.0
+    dot = sum(x * y for x, y in zip(query_vector, embedding, strict=True))
+    norm_query = sum(x * x for x in query_vector) ** 0.5
+    norm_doc = sum(y * y for y in embedding) ** 0.5
+    if norm_query == 0 or norm_doc == 0:
+        return 0.0
+    return dot / (norm_query * norm_doc)
+
+
 def _build_chunk(
     *, doc_id: str, text: str, document: str, section_number: str, section_title: str, path: str, order: int
 ) -> Chunk | None:
@@ -267,7 +285,9 @@ class MemoryKnowledgeRetriever:
 
 class MongoKnowledgeRetriever:
     """Semantic ($vectorSearch) + lexical (Atlas $search) candidate generation,
-    reranked with the Russian root-stemmed subject scorer below."""
+    reranked with a local reranker (true cosine similarity against each
+    candidate's own embedding, see _local_semantic_score) plus the Russian
+    root-stemmed subject scorer below."""
 
     def __init__(self, embedder: OllamaEmbeddings) -> None:
         self.embedder = embedder
@@ -283,9 +303,13 @@ class MongoKnowledgeRetriever:
             return []
 
     async def _find(self, query: str, limit: int) -> list[Chunk]:
+        print("Run find")
         collection = KnowledgeChunk.get_motor_collection()
         query_vector = await asyncio.to_thread(self.embedder.embed_query, query)
 
+        # embedding is kept in both result sets (not $project-ed out) - the
+        # local reranker below needs it to score every candidate by true
+        # cosine similarity, not just whichever channel happened to surface it.
         vector_pipeline = [
             {
                 "$vectorSearch": {
@@ -296,12 +320,10 @@ class MongoKnowledgeRetriever:
                     "limit": CANDIDATE_LIMIT,
                 }
             },
-            {"$project": {"embedding": 0}},
         ]
         text_pipeline = [
             {"$search": {"index": TEXT_INDEX_NAME, "text": {"query": query, "path": ["text", "section_title"]}}},
             {"$limit": CANDIDATE_LIMIT},
-            {"$project": {"embedding": 0}},
         ]
 
         vector_hits, text_hits = await asyncio.gather(
@@ -309,76 +331,30 @@ class MongoKnowledgeRetriever:
             collection.aggregate(text_pipeline).to_list(length=CANDIDATE_LIMIT),
         )
 
-        raw_by_id: dict[str, dict[str, Any]] = {}
-        chunks: dict[str, Chunk] = {}
-        semantic_ranks: dict[str, int] = {}
-        lexical_ranks: dict[str, int] = {}
-        for rank, doc in enumerate(vector_hits, start=1):
-            chunk = _chunk_from_raw(doc)
-            if chunk is None:
-                continue
-            chunks[chunk.id] = chunk
-            raw_by_id[chunk.id] = doc
-            semantic_ranks[chunk.id] = rank
-        for rank, doc in enumerate(text_hits, start=1):
-            chunk = _chunk_from_raw(doc)
-            if chunk is None:
-                continue
-            chunks.setdefault(chunk.id, chunk)
-            raw_by_id.setdefault(chunk.id, doc)
-            lexical_ranks[chunk.id] = rank
-
-        query_roots = _query_roots(query)
-        ranked: list[tuple[float, Chunk]] = []
-        seen: set[str] = set()
-        for chunk in chunks.values():
-            subject_score = score_chunk(query, chunk)
-            if subject_score < MIN_RETRIEVAL_SCORE:
-                continue
-            key = normalize_text(chunk.text)
-            if key in seen:
-                continue
-            seen.add(key)
-            coverage = len(query_roots & set(_content_roots(chunk.text))) / len(query_roots)
-            proximity = max(
-                (len(query_roots & set(window)) for window in _root_windows(chunk.text)),
-                default=0,
-            ) / len(query_roots)
-            # Rank-decay both native Mongo signals the same way the old memvid
-            # semantic rank was decayed, since neither's raw score is directly
-            # comparable to the hand-rolled subject_score/coverage/proximity terms.
-            semantic_score = 1 / (1 + semantic_ranks.get(chunk.id, CANDIDATE_LIMIT * 4) / 20)
-            lexical_score = 1 / (1 + lexical_ranks.get(chunk.id, CANDIDATE_LIMIT * 4) / 20)
-            score = semantic_score + lexical_score + subject_score + 4 * coverage**2 + 3 * proximity**2
-            ranked.append((score, chunk))
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        if not ranked:
-            return []
-
-        # Small ingestion chunks split lists mid-answer. Keep the strongest
-        # passage with its immediate same-section continuations, even when a
-        # continuation does not repeat the user's subject (e.g. portal features).
-        best_score, anchor = ranked[0]
-        selected = [anchor]
-        selected_ids = {anchor.id}
-        for continuation in await self._fetch_continuations(raw_by_id[anchor.id], limit):
-            if len(selected) >= limit:
-                break
-            if continuation.id not in selected_ids:
-                selected.append(continuation)
-                selected_ids.add(continuation.id)
-        # Preserve relevance order across sections, never global frame order.
-        for score, chunk in ranked[1:]:
-            if len(selected) >= limit or score < best_score * 0.85:
-                break
-            if chunk.id not in selected_ids:
-                selected.append(chunk)
-                selected_ids.add(chunk.id)
-        return selected[:limit]
+        hints = vector_hits + text_hits
+        print(len(hints))
+        documents = [{"text": hit["text"], "id": hit["id"], "metadata": {"path": hit["path"]}} for hit in hints]
+        reranked = reranker_repository.rerank(RerankRequest(query, documents))
+        chunks = []
+        for hit in reranked:
+            chunks.append(
+                Chunk.model_construct(
+                    id=hit["id"],
+                    text=hit["text"],
+                    document=str(PurePosixPath(hit["metadata"]["path"]).name),
+                    section="Раздел не указан",
+                    order=0,
+                    path=str(PurePosixPath(hit["metadata"]["path"])),
+                )
+            )
+        return chunks[:limit]
 
     @staticmethod
     async def _fetch_continuations(anchor_doc: dict[str, Any], limit: int) -> list[Chunk]:
-        if limit <= 1:
+        if limit <= 1 or not anchor_doc.get("document"):
+            # No document means a legacy/malformed row (see _chunk_from_raw) -
+            # {"document": None} would match every other row missing that
+            # field too, and Beanie can't parse rows lacking required fields.
             return []
         rows = await (
             KnowledgeChunk.find(

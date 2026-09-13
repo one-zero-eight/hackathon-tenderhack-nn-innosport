@@ -42,7 +42,6 @@ AGENT_INSTRUCTIONS = """Ты справочная поддержка Порта�
 После поиска проверь совпадение объекта И действия. Добавление сотрудника НЕ добавление МЧД;
 чат по контракту НЕ исполнение контракта; блокировка поставщика НЕ запрет ставок после торгов.
 Нерелевантный результат: новый поиск другими словами, не уточнение понятного вопроса.
-read_section с offset=next_offset читает обрезанный релевантный текст. Не повторяй offset=0.
 Если доказательств нет: respond kind=no_knowledge, citation_ids=[], без догадок и вопросов.
 
 respond kind=answer допустим только по прочитанным источникам, с их citation_ids.
@@ -182,12 +181,12 @@ TOOLS = [
         {"query": {"type": "string", "minLength": 2, "maxLength": 500}},
         ["query"],
     ),
-    _tool(
-        "read_section",
-        "Прочитать продолжение раздела по ID фрагмента из поиска.",
-        {"chunk_id": {"type": "string"}, "offset": {"type": "integer", "minimum": 0, "default": 0}},
-        ["chunk_id"],
-    ),
+    # _tool(
+    #     "read_section",
+    #     "Прочитать продолжение раздела по ID фрагмента из поиска.",
+    #     {"chunk_id": {"type": "string"}, "offset": {"type": "integer", "minimum": 0, "default": 0}},
+    #     ["chunk_id"],
+    # ),
     _tool(
         "ask_clarification",
         "Только если неизвестен тип объекта или действия и варианты — разные темы инструкции "
@@ -920,18 +919,6 @@ async def _execute(
         if set(args) != {"query"} or not isinstance(query, str) or not 2 <= len(query.strip()) <= 500:
             return [], "query должен быть строкой длиной от 2 до 500 символов."
         return await retriever.find(query.strip(), limit=6), None
-    if name == "read_section":
-        chunk_id = args.get("chunk_id")
-        offset = args.get("offset", 0)
-        if (
-            not set(args) <= {"chunk_id", "offset"}
-            or not isinstance(chunk_id, str)
-            or chunk_id not in evidence
-            or type(offset) is not int
-            or not 0 <= offset < len(clean_source_text(evidence[chunk_id].text))
-        ):
-            return [], "Укажи известный chunk_id и offset из next_offset (либо 0)."
-        return await retriever.read_section(chunk_id, limit=6), None
     return [], "Неизвестный инструмент. Доступны search_knowledge, read_section и respond."
 
 
