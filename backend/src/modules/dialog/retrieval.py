@@ -333,21 +333,22 @@ class MongoKnowledgeRetriever:
 
         hints = vector_hits + text_hits
         print(len(hints))
-        documents = [{"text": hit["text"], "id": hit["id"], "metadata": {"path": hit["path"]}} for hit in hints]
-        reranked = reranker_repository.rerank(RerankRequest(query, documents))
+        documents = [hit["text"] for hit in hints]
+        reranked = reranker_repository.rerank(query, documents)[:limit]
         chunks = []
-        for hit in reranked:
+        for index in reranked:
+            hit = documents[index["corpus_id"]]
             chunks.append(
                 Chunk.model_construct(
                     id=hit["id"],
                     text=hit["text"],
-                    document=str(PurePosixPath(hit["metadata"]["path"]).name),
+                    document=str(PurePosixPath(hit["path"]).name),
                     section="Раздел не указан",
                     order=0,
-                    path=str(PurePosixPath(hit["metadata"]["path"])),
+                    path=str(PurePosixPath(hit["path"])),
                 )
             )
-        return chunks[:limit]
+        return chunks
 
     @staticmethod
     async def _fetch_continuations(anchor_doc: dict[str, Any], limit: int) -> list[Chunk]:

@@ -1,17 +1,18 @@
 from typing import Optional
 
 from flashrank import Ranker, RerankRequest
+from sentence_transformers import CrossEncoder
 
 
 class RerankerRepository:
     def __init__(self):
-        self.ranker: Ranker | None = None
+        self.ranker: CrossEncoder | None = None
 
     def init(self):
-        self.ranker = Ranker(model_name="ms-marco-MultiBERT-L-12", cache_dir="../models")
+        self.ranker = CrossEncoder("DiTy/cross-encoder-russian-msmarco", max_length=512)
 
-    def rerank(self, request: RerankRequest):
-        return self.ranker.rerank(request)
+    def rerank(self, query: str, documents: list[str]):
+        return self.ranker.rank(query, documents)
 
 
 reranker_repository = RerankerRepository()
