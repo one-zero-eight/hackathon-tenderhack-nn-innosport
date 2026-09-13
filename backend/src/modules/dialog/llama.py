@@ -14,7 +14,7 @@ from src.logging_ import logger
 from src.modules.dialog.abuse import has_profanity_or_insult, has_working_request, preferred_rephrase, usable_rephrase
 from src.modules.dialog.classify import is_open_help, reports_ui_defect
 from src.modules.dialog.models import Chunk
-from src.modules.dialog.normalize import significant_stems
+from src.modules.dialog.normalize import ABBREVIATIONS, significant_stems
 from src.modules.dialog.retrieval import KnowledgeRetriever, clean_source_text
 from src.modules.dialog.schemas import ClarificationQuestion, SupportLine, ToolCall, ToolStatus
 from src.pydantic_base import BaseSchema
@@ -48,10 +48,11 @@ AGENT_INSTRUCTIONS = """Ты — справочная поддержка Пор�
 Переформулируй query, сохраняя смысл и ключевые термины.
 
 6. После search_knowledge:
-- понятный вопрос и sources отвечают → только respond(kind="answer") с citation_ids;
-- короткий запрос или не полный запрос, много вариантов → ask_clarification по правилам инструмента, не копируй текст sources в варианты;
+- sources описывают разные процедуры, а в вопросе нет выбора → ask_clarification, варианты из sources.section. Не склеивай несколько инструкций в один ответ;
+- один сценарий и вопрос понятен → respond(kind="answer") с citation_ids;
+- короткий запрос без объекта → ask_clarification по правилам инструмента;
 - пусто или нерелевантно → respond(kind="no_knowledge").
-Отвечай только по sources. Понятный вопрос после evidence не уточняй.
+Не копируй текст sources в варианты. Не уточняй, если sources уже сходятся в одну процедуру.
 
 7. Если sources нет или они не отвечают на вопрос → respond(kind="no_knowledge").
 Не додумывай отсутствующие факты.
@@ -199,14 +200,14 @@ TOOLS = [
     # ),
     _tool(
         "ask_clarification",
-        "Карточка с вариантами. "
+        "Карточка с вариантами, когда в вопросе не хватает выбора. "
         "«Помоги», «поможешь», «что умеешь» — это не тема. "
         "question: «С чем помочь?». "
         "options: Регистрация, Электронная подпись, Личный кабинет, Закупки, Контракты, Прайс-листы. "
-        "Без поиска. Не «Что нужно по теме «поможешь»». Не «Как пройти» / «Статус заявки» / «Ошибка». "
-        "Короткая тема справочника («регистрация», «МЧД») — только после search_knowledge: "
-        "«Что нужно по теме «<тема из справочника>»?» и 2–6 сценариев из sources.section. "
-        "Запрещено копировать текст sources: «Рисунок …», «При выборе опции «», обрывки. "
+        "Без поиска. Не «Что нужно по теме «поможешь»». "
+        "После search_knowledge, если sources — разные процедуры: "
+        "question про недостающий выбор, options — 2–6 коротких названий из sources.section. "
+        "Не склеивай разные инструкции в respond. Не копируй «Рисунок …» и обрывки. "
         "Не «что именно». Не вопросы в вариантах. Не ИНН/пароль/подтвердить.",
         ClarificationQuestion.model_json_schema()["properties"],
         ["question", "options"],
@@ -396,7 +397,12 @@ class LlamaCppClient:
             if is_open_help(question):
                 allowed = {"ask_clarification"}
             elif evidence:
-                allowed = {"ask_clarification", "respond"} if _needs_fork(question) else {"respond"}
+                if _needs_disambiguation(question, evidence):
+                    allowed = {"ask_clarification"}
+                elif _needs_fork(question):
+                    allowed = {"ask_clarification", "respond"}
+                else:
+                    allowed = {"respond"}
             elif _needs_fork(question):
                 allowed = {"search_knowledge"}
             else:
@@ -484,7 +490,14 @@ class LlamaCppClient:
                         return await _finish_clarification(clarification, tool_call, tool_calls, on_tool)
             elif name == "respond":
                 reply = _parse_reply(args, evidence)
-                if reply is not None and reply.kind == "answer" and reports_ui_defect(question):
+                if reply is not None and reply.kind == "answer" and _needs_disambiguation(question, evidence):
+                    reply = None
+                    result = {
+                        "error": "В источниках несколько разных процедур. "
+                        "ask_clarification: вопрос про недостающий выбор, "
+                        "варианты из sources.section, не склеивай инструкции."
+                    }
+                elif reply is not None and reply.kind == "answer" and reports_ui_defect(question):
                     reply = None
                     result = {
                         "error": "Это сбой интерфейса, не инструкция «как нажать». "
@@ -793,6 +806,8 @@ JUNK_OPTION_RE = re.compile(
     r"рисунок|блокок|при выборе|опци[яи]|форма\s+[«\"]|http|www\.",
     re.IGNORECASE,
 )
+WEAK_OPTION_RE = re.compile(r"^(?:после|при|если|когда|нажм|выбер|откро|страниц)", re.IGNORECASE)
+SECTION_FAMILY_RE = re.compile(r"^(\d+)(?:\.(\d+))?")
 GENERIC_INTENTS = frozenset({"как пройти", "статус заявки", "ошибка"})
 HELP_MENU = ClarificationQuestion(
     question="С чем помочь?",
@@ -862,17 +877,81 @@ def _topic_label(question: str) -> str:
 
 def _short_option(text: str) -> str:
     text = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", text).strip()
+    text = re.sub(r"^рисунок\s+\d+\s*[–—-]\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"электронн\w*\s+подпис\w*", "ЭП", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+", " ", text).strip(' .:—-«»"')
-    return " ".join(text.split()[:4])[:100]
+    words = text.split()
+    if len(words) > 4:
+        last = words[-1].casefold().strip(".,:;«»\"")
+        words = words[-4:] if last in ABBREVIATIONS else words[:4]
+    while words and words[-1].casefold() in {"на", "по", "для", "без", "в", "с", "и"}:
+        words.pop()
+    text = " ".join(words)[:100]
+    return text[:1].upper() + text[1:] if text else text
 
 
 def _usable_option(label: str, topic: str) -> bool:
     if len(label) < 4 or label.casefold() == topic.casefold():
         return False
-    if JUNK_OPTION_RE.search(label) or label.endswith(("«", "»", '"', "(", "—")):
+    if JUNK_OPTION_RE.search(label) or WEAK_OPTION_RE.search(label) or label.endswith(("«", "»", '"', "(", "—")):
         return False
     return bool(re.search(r"[А-Яа-яA-Za-z]{3,}", label))
+
+
+def _section_family(section: str) -> str:
+    match = SECTION_FAMILY_RE.match(section.strip())
+    if match is None:
+        return ""
+    if match.group(2):
+        return f"{match.group(1)}.{match.group(2)}"
+    return match.group(1)
+
+
+def _procedure_options(evidence: dict[str, Chunk], topic: str = "") -> list[str]:
+    options: list[str] = []
+    seen: set[str] = set()
+    for chunk in evidence.values():
+        section = chunk.section.strip()
+        label = _short_option(section)
+        key = label.casefold()
+        if not _usable_option(label, topic) or key in seen:
+            continue
+        seen.add(key)
+        options.append(label)
+        if len(options) >= 6:
+            break
+    return options
+
+
+def _procedure_families(evidence: dict[str, Chunk]) -> set[str]:
+    return {family for chunk in evidence.values() if (family := _section_family(chunk.section))}
+
+
+NARROW_PHRASE_RE = re.compile(r"\b(?:на|по|для|про|без|через)\s+\w+", re.IGNORECASE)
+
+
+def _question_selects_one(question: str, labels: list[str]) -> bool:
+    """True only if the user added a qualifier that matches exactly one procedure."""
+    query_stems = set(significant_stems(question))
+    label_stems = [set(significant_stems(label)) for label in labels]
+    if len(label_stems) < 2:
+        return True
+    unique = [stem for stem in query_stems if sum(stem in stems for stems in label_stems) == 1]
+    if not unique:
+        return False
+    return bool(query_stems & ABBREVIATIONS) or bool(NARROW_PHRASE_RE.search(question))
+
+
+def _needs_disambiguation(question: str, evidence: dict[str, Chunk]) -> bool:
+    """Sources describe several procedures and the question does not pick one."""
+    if not evidence or is_open_help(question):
+        return False
+    labels = _procedure_options(evidence)
+    if len(labels) < 2:
+        return False
+    families = _procedure_families(evidence)
+    diverse = len(families) >= 2 if families else True
+    return diverse and not _question_selects_one(question, labels)
 
 
 def _facet_options(evidence: dict[str, Chunk], topic: str) -> list[str]:
@@ -896,20 +975,27 @@ def _clarification_from_evidence(question: str, evidence: dict[str, Chunk]) -> C
     if is_open_help(question) or _is_help_verb_topic(question):
         return help_menu_clarification()
     topic = _topic_label(question)
-    options = _facet_options(evidence, topic)
+    options = _procedure_options(evidence, topic)
+    if len(options) < 2:
+        options = _facet_options(evidence, topic)
     if len(options) < 2:
         return None
-    card = ClarificationQuestion(question=f"Что нужно по теме «{topic}»?", options=options)
+    prompt = (
+        f"Что нужно по теме «{topic}»?" if _needs_fork(question) else "Какой вариант имеется в виду?"
+    )
+    card = ClarificationQuestion(question=prompt, options=options)
     if not _is_type_fork(card):
         return None
     return card
 
 
 def _may_clarify(question: str, evidence: dict[str, Chunk]) -> bool:
-    """Clarify after search for a short topic, or immediately for topic-less help."""
+    """Clarify when the request is short, topic-less, or sources fork."""
     if is_open_help(question):
         return True
-    return bool(evidence) and _needs_fork(question)
+    if not evidence:
+        return False
+    return _needs_fork(question) or _needs_disambiguation(question, evidence)
 
 
 def _is_type_fork(clarification: ClarificationQuestion) -> bool:
