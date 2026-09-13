@@ -18,12 +18,16 @@ import ChatTranscript, { type ChatTranscriptHandle } from './ChatTranscript'
 const emptyChat = createChat('', '')
 
 export default function ChatPage() {
-  const dialogId = useMatch({ from: '/_chat/tickets/$dialogId', shouldThrow: false, select: (match) => match.params.dialogId })
+  const routeDialogId = useMatch({ from: '/_chat/tickets/$dialogId', shouldThrow: false, select: (match) => match.params.dialogId })
   const navigate = useNavigate()
   const router = useRouter()
+  const [replacedDialog, setReplacedDialog] = useState<{ previousId: string; id: string } | null>(null)
+  // Keep the resolved chat visible while the router replaces its temporary ID.
+  const dialogId = replacedDialog && routeDialogId === replacedDialog.previousId ? replacedDialog.id : routeDialogId
   const onActiveChatChange = useCallback(
     (id: string, previousId: string) => {
       if (router.state.location.pathname === `/tickets/${previousId}`) {
+        setReplacedDialog({ previousId, id })
         void navigate({ to: '/tickets/$dialogId', params: { dialogId: id }, replace: true })
       }
     },
@@ -122,7 +126,7 @@ export default function ChatPage() {
                   Новое обращение
                 </Button>
               </div>
-            ) : !routeReady || (isBackendDialogId(requestedId) && dialogQuery.isPending) ? (
+            ) : !routeReady || (isBackendDialogId(requestedId) && dialogQuery.isPending && messages.length === 0) ? (
               <p role="status" className="text-foreground/50 m-auto p-6">
                 Загружаем обращение…
               </p>
