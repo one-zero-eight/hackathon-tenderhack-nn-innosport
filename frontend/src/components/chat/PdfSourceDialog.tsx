@@ -10,6 +10,7 @@ export default function PdfSourceDialog({ citation, onClose }: { citation: Schem
   if (!url) return null
   const title = citation.document.replace(/_/g, ' ').replace(/\.pdf$/i, '')
   const page = citation.path.split('#page=')[1]
+  const details = [citation.section.trim(), page ? `Страница ${page}` : ''].filter(Boolean).join(' · ')
 
   return (
     <Dialog open onClose={onClose} className="relative z-50">
@@ -19,7 +20,7 @@ export default function PdfSourceDialog({ citation, onClose }: { citation: Schem
           <div className="border-border flex shrink-0 items-start gap-3 border-b p-4">
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-ui-body font-semibold wrap-break-word">{title}</DialogTitle>
-              <p className="text-foreground/55 mt-1 text-xs wrap-break-word">{citation.section} · Страница {page}</p>
+              {details && <p className="text-foreground/55 mt-1 text-xs wrap-break-word">{details}</p>}
             </div>
             <a href={url} target="_blank" rel="noopener noreferrer" aria-label="Открыть PDF в новой вкладке" title="Открыть PDF в новой вкладке" className="hover:bg-surface-2 focus-visible:outline-primary rounded-lg p-2 focus-visible:outline-2">
               <LuExternalLink aria-hidden="true" className="size-5" />
@@ -28,7 +29,7 @@ export default function PdfSourceDialog({ citation, onClose }: { citation: Schem
               <LuX aria-hidden="true" className="size-5" />
             </Button>
           </div>
-          <iframe key={url} src={url} title={`${title}, страница ${page}`} className="min-h-0 w-full flex-1 border-0 bg-white" />
+          <iframe key={url} src={url} title={page ? `${title}, страница ${page}` : title} className="min-h-0 w-full flex-1 border-0 bg-white" />
         </DialogPanel>
       </div>
     </Dialog>

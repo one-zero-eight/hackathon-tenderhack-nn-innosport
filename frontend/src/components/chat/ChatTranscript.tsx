@@ -222,7 +222,7 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                                   >
                                     <span className={pdfSourceUrl(citation.path) ? 'underline decoration-current/30 underline-offset-4' : ''}>{citation.document.replace(/_/g, ' ').trim() || citation.path}</span>
                                     {citation.section.trim() && <span className="mt-0.5 block text-gray-500 dark:text-gray-400">{citation.section}</span>}
-                                    {pdfSourceUrl(citation.path) && <span className="text-primary mt-0.5 block">Страница {citation.path.split('#page=')[1]}</span>}
+                                    {pdfSourceUrl(citation.path) && <span className="text-primary mt-0.5 block">{citation.path.includes('#page=') ? `Страница ${citation.path.split('#page=')[1]}` : 'Открыть PDF'}</span>}
                                   </button>
                                 </li>
                               ))}

@@ -6,12 +6,12 @@ from pathlib import PurePosixPath
 from typing import Any, Protocol
 
 from beanie import PydanticObjectId
-from pydantic import ValidationError
 
 from src.logging_ import logger
 from src.modules.dialog.embeddings import OllamaEmbeddings
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import ABBREVIATIONS, normalize_text, root_ru, significant_stems
+from src.modules.dialog.sources import pdf_source_path
 from src.storages.mongo.knowledge import TEXT_INDEX_NAME, VECTOR_INDEX_NAME, KnowledgeChunk
 
 SENTENCE_RE = re.compile(r'(?<=[.!?])\s+(?=[А-ЯЁA-Z«"\d])')
@@ -202,20 +202,18 @@ def _build_chunk(
     *, doc_id: str, text: str, document: str, section_number: str, section_title: str, path: str, order: int
 ) -> Chunk | None:
     cleaned = clean_source_text(text.strip())
-    document = document.strip()
     path = path.strip()
-    # if not cleaned or not document or not path:
-    #     return None
-    section = " ".join(part for part in (section_number.strip(), section_title.strip()) if part) or "Раздел не указан"
-    return Chunk(id=doc_id, text=cleaned, document=document, section=section, path=path, order=order)
+    document = document.strip() or PurePosixPath(path).name
+    if not cleaned:
+        return None
+    section = " ".join(part for part in (section_number.strip(), section_title.strip()) if part)
+    source_path = pdf_source_path(document, cleaned) or path
+    return Chunk(id=doc_id, text=cleaned, document=document, section=section, path=source_path, order=order)
 
 
 def _chunk_from_raw(doc: dict[str, Any]) -> Chunk | None:
     path = str(doc.get("path") or "")
-    # Older/legacy documents (predating the document/section_number split)
-    # only carry a path like "documents/<name>.pdf" - derive document from it
-    # instead of dropping the chunk, so find() still works against that data.
-    document = str(doc.get("document") or "") or (PurePosixPath(path).name if path else "")
+    document = str(doc.get("document") or "")
     return _build_chunk(
         doc_id=str(doc.get("_id", "")),
         text=str(doc.get("text") or ""),
