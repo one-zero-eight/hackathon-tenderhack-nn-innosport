@@ -359,18 +359,28 @@ class DialogService:
                 )
             )
             history[-1] = ("user", agent_question)
-        result = await self.llama_client.run(
-            agent_question,
-            history,
-            self.retriever,
-            lexicon_matches=scan.matched_terms,
-            on_text=on_text,
-            on_tool=on_tool,
-        )
-        tool_calls = result.tool_calls if result is not None else []
-        moderation = result.moderation if result is not None else None
-        if accepted_suggestion or not has_profanity_or_insult(text):
-            moderation = None
+        tool_calls: list[ToolCall] = []
+        moderation = None
+        if not accepted_suggestion and (scan.has_matches or has_profanity_or_insult(text)):
+            moderation = await self.llama_client.moderate(text, lexicon_matches=scan.matched_terms)
+            if moderation is None:
+                return self._finish(
+                    state,
+                    reply=MODEL_UNAVAILABLE_REPLY,
+                    status=DialogStatus.CLARIFYING,
+                    closed=False,
+                    reason="model_unavailable",
+                    line=None,
+                )
+            tool_call = ToolCall(
+                id=f"moderate_{uuid4().hex}",
+                name="moderate",
+                arguments=moderation.model_dump(),
+                result={"status": "completed", **moderation.model_dump()},
+            )
+            tool_calls.append(tool_call)
+            if on_tool is not None:
+                await on_tool(tool_call.model_copy(deep=True), "completed")
         if moderation is not None and moderation.verdict == "mixed":
             leftover = as_user_message(moderation.cleaned_request)
             if leftover and has_profanity_or_insult(leftover):
@@ -417,6 +427,15 @@ class DialogService:
                 suggested_rephrase=suggestion,
                 tool_calls=tool_calls,
             )
+        result = await self.llama_client.run(
+            agent_question,
+            history,
+            self.retriever,
+            on_text=on_text,
+            on_tool=on_tool,
+        )
+        if result is not None:
+            tool_calls.extend(result.tool_calls)
         if result is not None and result.reply is not None:
             generated = result.reply
             if result.clarification is not None:
