@@ -17,14 +17,11 @@ EMBEDDING_DIMENSION = 1024  # mxbai-embed-large
 
 class KnowledgeChunk(CustomDocument):
     text: str
-    text_hash: str  # sha256(text), unique - dedupes identical chunk text across documents
-    document: str
     section_number: str = ""
     section_title: str = ""
     path: str
     label: str = "manual"  # "manual" | "glossary"
     term: str | None = None
-    order: int  # 0-based, local to (document, section_number, section_title)
     embedding: list[float]
 
     class Settings:
