@@ -40,7 +40,13 @@ ROOT_ALIASES = {
 }
 GENERIC_ROOT_WEIGHTS = {
     ROOT_ALIASES.get(root_ru(stem), root_ru(stem)): weight
-    for word, weight in (("найти", 0.45), ("сведения", 0.55), ("страница", 0.8), ("сайт", 0.65))
+    for word, weight in (
+        ("найти", 0.45),
+        ("сведения", 0.55),
+        ("страница", 0.8),
+        ("сайт", 0.65),
+        ("профиль", 0.7),
+    )
     for stem in significant_stems(word)
 }
 

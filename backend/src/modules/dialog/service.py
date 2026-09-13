@@ -15,7 +15,14 @@ from src.modules.dialog.abuse import (
     scan_abuse,
     usable_rephrase,
 )
-from src.modules.dialog.classify import is_capability_question, is_greeting, is_thanks, reports_ui_defect
+from src.modules.dialog.classify import (
+    is_capability_question,
+    is_greeting,
+    is_open_help,
+    is_smalltalk,
+    is_thanks,
+    reports_ui_defect,
+)
 from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient, TextCallback, ToolCallback, as_user_message
 from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_answer
 from src.modules.dialog.schemas import (
@@ -46,7 +53,6 @@ from src.modules.dialog.store import (
 )
 from src.modules.dialog.texts import (
     ABUSE_REPLY,
-    CAPABILITIES_REPLY,
     CLOSED_REPLY,
     GREETING_REPLY,
     L1_REPLY,
@@ -311,19 +317,19 @@ class DialogService:
                 reason=None,
                 line=None,
             )
-        if pending is None and is_capability_question(text):
+        if pending is None and is_thanks(text):
             return self._finish(
                 state,
-                reply=CAPABILITIES_REPLY,
+                reply="Пожалуйста! Обращайтесь, если появятся вопросы.",
                 status=DialogStatus.CLARIFYING,
                 closed=False,
                 reason=None,
                 line=None,
             )
-        if pending is None and is_thanks(text):
+        if pending is None and is_smalltalk(text):
             return self._finish(
                 state,
-                reply="Пожалуйста! Обращайтесь, если появятся вопросы.",
+                reply="Спасибо, всё хорошо. Напишите, с чем помочь по Порталу поставщиков.",
                 status=DialogStatus.CLARIFYING,
                 closed=False,
                 reason=None,
@@ -515,7 +521,10 @@ class DialogService:
         user_messages = [
             item.content
             for item in state.messages
-            if item.role == "user" and not is_greeting(item.content) and not is_capability_question(item.content)
+            if item.role == "user"
+            and not is_greeting(item.content)
+            and not is_capability_question(item.content)
+            and not is_open_help(item.content)
         ]
         if not user_messages:
             return ""

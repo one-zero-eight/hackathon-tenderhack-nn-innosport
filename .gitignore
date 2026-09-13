@@ -15,3 +15,4 @@ models/__MACOSX/ms-marco-MultiBERT-L-12/._tokenizer_config.json
 models/__MACOSX/ms-marco-MultiBERT-L-12/._tokenizer.json
 models/__MACOSX/ms-marco-MultiBERT-L-12/._vocab.txt
 models/__MACOSX/._ms-marco-MultiBERT-L-12
+db.knowledge_chunks.json
