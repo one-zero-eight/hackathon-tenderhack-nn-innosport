@@ -81,7 +81,7 @@ export function chatFromListItem(item: SchemaDialogListItem, existing?: Chat): C
     ...(item.preview ? { preview: item.preview } : existing?.preview ? { preview: existing.preview } : {}),
     ...(status === 'closed' ? { closedAt: existing?.closedAt ?? updatedAt } : {}),
     ...(item.feedback ? { feedback: mapDialogFeedback(item.feedback) } : {}),
-    ...(item.status === 'escalate' && !item.closed ? { offerSpecialist: true } : existing?.offerSpecialist && status === 'open' ? { offerSpecialist: true } : {}),
+    offerSpecialist: item.status === 'escalate' && !item.closed,
   }
   if (existing?.handoff) chat.handoff = existing.handoff
   else if (item.status === 'escalate' && item.closed && line) {

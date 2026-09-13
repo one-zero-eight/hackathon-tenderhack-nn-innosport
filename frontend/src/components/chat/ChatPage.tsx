@@ -103,7 +103,7 @@ export default function ChatPage() {
   )
   return (
     <div className="bg-background text-foreground flex h-dvh overflow-hidden">
-      <aside className="border-border hidden w-64 shrink-0 border-r md:block">{sidebar}</aside>
+      <aside className="border-border hidden w-72 shrink-0 border-r md:block">{sidebar}</aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
           <main className="relative flex min-w-0 flex-1 flex-col">
@@ -134,6 +134,8 @@ export default function ChatPage() {
                   busy={!isNewChat && chat.busy}
                   onAnswerClarification={chat.answerClarification}
                   onAcceptSuggestion={chat.acceptSuggestion}
+                  onContactSpecialist={chat.canContactSpecialist ? chat.contactSpecialist : undefined}
+                  previewSpecialistLine={transport.previewSpecialistLine}
                   onNearBottomChange={setNearBottom}
                   afterMessages={
                     !isNewChat && (chat.canFeedback || chat.activeChat.feedback) ? (
@@ -181,7 +183,7 @@ export default function ChatPage() {
                       onNewChat={() => void createTicket()}
                     />
                     {(isNewChat || chat.canContactSpecialist) && (
-                      <SpecialistContact busy={!isNewChat && chat.busy} onContact={isNewChat ? (contact) => startRequest(() => chat.contactSpecialist(contact)) : chat.contactSpecialist} />
+                      <SpecialistContact key={activeChat.id} chat={activeChat} previewLine={transport.previewSpecialistLine} busy={!isNewChat && chat.busy} onContact={isNewChat ? (contact) => startRequest(() => chat.contactSpecialist(contact)) : chat.contactSpecialist} />
                     )}
                     {!closed && (
                       <ChatComposer

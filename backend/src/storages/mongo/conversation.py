@@ -54,6 +54,7 @@ class ConversationSchema(BaseSchema):
     insights_retry_at: dtm.datetime | None = None
     status: DialogStatus | None = None
     line: SupportLine | None = None
+    specialist_line_preview: SupportLine | None = None
     reason: str | None = None
     feedback: DialogFeedback | None = None
     specialist_contact: SpecialistContact | None = None
@@ -97,6 +98,7 @@ def document_to_state(document: Conversation) -> ConversationState:
         insights_retry_at=document.insights_retry_at,
         status=document.status,
         line=document.line,
+        specialist_line_preview=document.specialist_line_preview,
         reason=document.reason,
         feedback=document.feedback,
         specialist_contact=document.specialist_contact,
@@ -173,6 +175,7 @@ class MongoConversationStore:
                     "insights_retry_at": state.insights_retry_at,
                     "status": state.status,
                     "line": state.line,
+                    "specialist_line_preview": state.specialist_line_preview,
                     "reason": state.reason,
                     "feedback": state.feedback.model_dump(mode="python") if state.feedback else None,
                     "specialist_contact": state.specialist_contact.model_dump(mode="python")

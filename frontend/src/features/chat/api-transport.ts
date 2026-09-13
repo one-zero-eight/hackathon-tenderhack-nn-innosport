@@ -82,6 +82,10 @@ export function useApiTransport(): ChatTransport {
         invalidateDialogs()
         return reply
       },
+      previewSpecialistLine: (chatId, signal) => {
+        const options = $api.queryOptions('get', '/dialogs/{dialog_id}/specialist-line', { params: { path: { dialog_id: chatId } }, signal }, { staleTime: 0, retry: false })
+        return queryClient.fetchQuery(options)
+      },
       requestSpecialist: async (chat, signal, contact) => {
         const dialogId = await ensureDialogId(createDialog, signal, chat.id)
         try {

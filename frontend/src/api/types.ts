@@ -160,6 +160,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dialogs/{dialog_id}/specialist-line": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Specialist Line
+         * @description Determine the support line without escalating or closing the appeal.
+         */
+        get: operations["preview_specialist_line_dialogs__dialog_id__specialist_line_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dialogs/{dialog_id}/escalate": {
         parameters: {
             query?: never;
@@ -1043,6 +1063,37 @@ export interface operations {
                 };
                 content: {
                     "application/x-ndjson": components["schemas"]["DialogStreamEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_specialist_line_dialogs__dialog_id__specialist_line_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dialog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportLine"];
                 };
             };
             /** @description Validation Error */

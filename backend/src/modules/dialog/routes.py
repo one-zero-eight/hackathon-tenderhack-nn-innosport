@@ -18,6 +18,7 @@ from src.modules.dialog.schemas import (
     DialogView,
     MessageCreate,
     SpecialistContact,
+    SupportLine,
 )
 from src.modules.dialog.service import DialogClosedError, DialogService
 
@@ -144,6 +145,12 @@ async def stream_message(dialog_id: str, payload: MessageCreate, service: Dialog
         events,
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/dialogs/{dialog_id}/specialist-line")
+async def preview_specialist_line(dialog_id: str, service: DialogServiceDep) -> SupportLine:
+    """Determine the support line without escalating or closing the appeal."""
+    return await service.preview_specialist_line(dialog_id)
 
 
 @router.post("/dialogs/{dialog_id}/escalate")

@@ -55,8 +55,6 @@ from src.modules.dialog.texts import (
     ABUSE_REPLY,
     CLOSED_REPLY,
     GREETING_REPLY,
-    L1_REPLY,
-    L2_REPLY,
     MIXED_ABUSE_REPLY,
     MODEL_UNAVAILABLE_REPLY,
     NO_KNOWLEDGE_REPLY,
@@ -215,6 +213,7 @@ class DialogService:
         suggestion = state.suggested_rephrase
         state.clarification = None
         state.suggested_rephrase = None
+        state.specialist_line_preview = None
         text = suggestion.content if suggestion_id is not None and suggestion is not None else content.strip()
         state.messages.append(StoredMessage(role="user", content=text))
         response = await self._step(
@@ -245,6 +244,8 @@ class DialogService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="At least one user message is required before selecting a specialist",
             )
+        if state.specialist_line_preview is not None:
+            return state.specialist_line_preview
         line = await self.llama_client.classify_line("\n".join(user_messages))
         if line is None:
             raise HTTPException(
@@ -252,6 +253,15 @@ class DialogService:
                 detail="Line classification is unavailable",
             )
         return line
+
+    async def preview_specialist_line(self, dialog_id: str) -> SupportLine:
+        state = (await self._require(dialog_id)).model_copy(deep=True)
+        if state.closed:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Dialog is closed")
+        if state.specialist_line_preview is None:
+            state.specialist_line_preview = await self._specialist_line(state)
+            await self._save(state)
+        return state.specialist_line_preview
 
     async def request_specialist(self, dialog_id: str, payload: SpecialistContact) -> DialogResponse:
         state = (await self._require(dialog_id)).model_copy(deep=True)
@@ -261,7 +271,7 @@ class DialogService:
         state.specialist_contact = payload.model_copy(deep=True)
         response = self._finish(
             state,
-            reply=L2_REPLY if line == SupportLine.L2 else L1_REPLY,
+            reply=f"Ваш запрос отправлен на {line.value[1:]} линию поддержки",
             status=DialogStatus.ESCALATE,
             closed=True,
             reason="specialist_requested",

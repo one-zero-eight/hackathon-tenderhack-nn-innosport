@@ -1,9 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { LuCheck, LuChevronDown, LuCircleAlert, LuClock, LuFileText, LuLoaderCircle, LuSparkles, LuWrench } from 'react-icons/lu'
-import type { Chat, ChatMessage, ChatToolStatus, ClarificationRequest, SuggestedRephrase } from '@/features/chat/types'
+import type { SchemaSpecialistContact } from '@/api/types'
+import type { Chat, ChatMessage, ChatToolStatus, ChatTransport, ClarificationRequest, SuggestedRephrase } from '@/features/chat/types'
 import { pendingClarificationMessageId, pendingSuggestedRephraseMessageId } from '@/features/chat/model'
 import ClarificationCard from './ClarificationCard'
 import SuggestedRephraseAction from './SuggestedRephraseAction'
+import SpecialistContact from './SpecialistContact'
 import ChatOutline from './ChatOutline'
 import MarkdownMessage from './MarkdownMessage'
 import PdfSourceDialog from './PdfSourceDialog'
@@ -20,6 +22,8 @@ interface ChatTranscriptProps {
   onNearBottomChange?: (nearBottom: boolean) => void
   onAnswerClarification?: (request: ClarificationRequest, content: string) => Promise<boolean>
   onAcceptSuggestion?: (suggestion: SuggestedRephrase) => Promise<boolean>
+  onContactSpecialist?: (contact: SchemaSpecialistContact) => Promise<boolean>
+  previewSpecialistLine?: ChatTransport['previewSpecialistLine']
 }
 
 const toolStatuses = {
@@ -99,7 +103,7 @@ function ToolActivity({ message }: { message: ChatMessage }) {
   )
 }
 
-const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onNearBottomChange, onAnswerClarification, onAcceptSuggestion }, ref) => {
+const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ chat, busy = false, afterMessages, onNearBottomChange, onAnswerClarification, onAcceptSuggestion, onContactSpecialist, previewSpecialistLine }, ref) => {
   const [activeMessage, setActiveMessage] = useState('')
   const [pdfSource, setPdfSource] = useState<{ chatId: string; citation: NonNullable<ChatMessage['citations']>[number] } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -273,6 +277,9 @@ const ChatTranscript = forwardRef<ChatTranscriptHandle, ChatTranscriptProps>(({ 
                       closed={chat.status === 'closed'}
                       onAccept={message.id === pendingSuggestionId ? onAcceptSuggestion : undefined}
                     />
+                  )}
+                  {message.role === 'assistant' && !message.pending && index === messages.length - 1 && chat.offerSpecialist && chat.status === 'open' && !chat.handoff && onContactSpecialist && (
+                    <SpecialistContact busy={busy} chat={chat} previewLine={previewSpecialistLine} onContact={onContactSpecialist} placement="message" />
                   )}
                   {message.kind === 'handoff' && chat.handoff?.simulated && <p className="text-foreground/45 text-ui-small mt-2">Демонстрация: реальная заявка не отправлена, связь со специалистом не установлена.</p>}
                 </article>

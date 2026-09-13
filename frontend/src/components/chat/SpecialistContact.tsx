@@ -1,13 +1,18 @@
 import { Description, Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
+import { skipToken, useQuery } from '@tanstack/react-query'
+import type { Chat, ChatTransport } from '@/features/chat/types'
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { LuHeadset, LuLoaderCircle, LuX } from 'react-icons/lu'
 import type { SchemaSpecialistContact } from '@/api/types'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/input'
 
-export default function SpecialistContact({ busy, onContact }: {
+export default function SpecialistContact({ busy, onContact, chat, previewLine, placement = 'composer' }: {
   busy: boolean
+  chat: Chat
+  previewLine: ChatTransport['previewSpecialistLine']
   onContact: (contact: SchemaSpecialistContact) => Promise<boolean>
+  placement?: 'composer' | 'message'
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
@@ -15,6 +20,15 @@ export default function SpecialistContact({ busy, onContact }: {
   const [submitError, setSubmitError] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  const hasQuestion = chat.messages.some((message) => message.role === 'user' && !message.pending)
+  const lineQuery = useQuery({
+    queryKey: ['specialist-line-preview', chat.id, chat.messages.at(-1)?.id],
+    queryFn: previewLine ? ({ signal }) => previewLine(chat.id, signal) : skipToken,
+    enabled: open && !busy && hasQuestion,
+    retry: false,
+    refetchOnWindowFocus: false,
+  })
+  const line = (!busy || submitting) && hasQuestion ? lineQuery.data : undefined
 
   const close = () => {
     if (!submittingRef.current) setOpen(false)
@@ -22,7 +36,7 @@ export default function SpecialistContact({ busy, onContact }: {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (submittingRef.current) return
+    if (submittingRef.current || busy || !line || lineQuery.isFetching || lineQuery.isError) return
     submittingRef.current = true
     setSubmitting(true)
     setSubmitError(false)
@@ -44,11 +58,11 @@ export default function SpecialistContact({ busy, onContact }: {
 
   return (
     <>
-      <div className="mb-2 flex justify-end">
+      <div className={placement === 'message' ? 'mt-3 flex' : 'mb-2 flex justify-end'}>
         <Button
-          variant="ghost"
+          variant={placement === 'message' ? 'outline' : 'ghost'}
           size="sm"
-          className="text-foreground/55 hover:text-foreground flex items-center gap-1.5 text-xs font-normal"
+          className={placement === 'message' ? 'flex items-center gap-1.5' : 'text-foreground/55 hover:text-foreground flex items-center gap-1.5 text-xs font-normal'}
           aria-haspopup="dialog"
           onClick={() => {
             setSubmitError(false)
@@ -70,12 +84,28 @@ export default function SpecialistContact({ busy, onContact }: {
                   <LuX aria-hidden="true" className="size-5" />
                 </Button>
               </div>
+              <div className="bg-primary/5 text-ui-body mt-3 rounded-xl p-3" aria-live="polite">
+                {busy && !submitting ? (
+                  <p>Дождитесь ответа бота — после этого определим линию поддержки.</p>
+                ) : !hasQuestion ? (
+                  <p>Сначала опишите вопрос в чате, чтобы определить линию поддержки.</p>
+                ) : lineQuery.isError ? (
+                  <div role="alert" className="space-y-2">
+                    <p className="text-error">Не удалось определить линию поддержки.</p>
+                    <Button variant="outline" size="sm" onClick={() => void lineQuery.refetch()}>Повторить</Button>
+                  </div>
+                ) : lineQuery.isFetching || !line ? (
+                  <p className="flex items-center gap-2">
+                    <LuLoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
+                    Определяем линию поддержки…
+                  </p>
+                ) : (
+                  <p className="text-primary font-medium">Запрос будет отправлен на {line.slice(1)}-ю линию поддержки ({line}).</p>
+                )}
+              </div>
               <Description className="text-foreground/60 text-ui-body mt-2">
                 Укажите реквизиты организации и email для связи. Оператор получит историю этого обращения.
               </Description>
-              {busy && !submitting && (
-                <p className="text-foreground/65 text-ui-body mt-3">Дождитесь ответа бота — после этого можно передать обращение.</p>
-              )}
               <form onSubmit={(event) => void submit(event)}>
                 <fieldset disabled={submitting} className="mt-5 space-y-4">
                   <div>
@@ -95,7 +125,7 @@ export default function SpecialistContact({ busy, onContact }: {
                 {submitError && <p role="alert" className="text-error text-ui-body mt-4">Не удалось передать обращение. Реквизиты сохранены в форме — попробуйте ещё раз.</p>}
                 <div className="mt-6 flex flex-wrap justify-end gap-2">
                   <Button variant="ghost" disabled={submitting} onClick={close}>Отмена</Button>
-                  <Button type="submit" disabled={busy || submitting} className="flex items-center justify-center gap-2">
+                  <Button type="submit" disabled={busy || submitting || !line || lineQuery.isFetching || lineQuery.isError} className="flex items-center justify-center gap-2">
                     {submitting && <LuLoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
                     {submitting ? 'Передаём…' : 'Передать оператору'}
                   </Button>

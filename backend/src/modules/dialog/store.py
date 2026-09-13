@@ -50,6 +50,7 @@ class ConversationState(BaseSchema):
     insights_retry_at: dtm.datetime | None = None
     status: DialogStatus | None = None
     line: SupportLine | None = None
+    specialist_line_preview: SupportLine | None = None
     reason: str | None = None
     feedback: DialogFeedback | None = None
     specialist_contact: SpecialistContact | None = None
