@@ -1,5 +1,6 @@
 import asyncio
 import re
+from functools import lru_cache
 from html import unescape
 from itertools import pairwise
 from pathlib import PurePosixPath
@@ -9,6 +10,7 @@ from beanie import PydanticObjectId
 
 from src.logging_ import logger
 from src.modules.dataset.reranker import reranker_repository
+from src.modules.dialog.catalog import load_knowledge
 from src.modules.dialog.embeddings import OllamaEmbeddings
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import ABBREVIATIONS, normalize_text, root_ru, significant_stems
@@ -16,12 +18,15 @@ from src.modules.dialog.sources import pdf_source_path
 from src.storages.mongo.knowledge import TEXT_INDEX_NAME, VECTOR_INDEX_NAME, KnowledgeChunk
 
 SENTENCE_RE = re.compile(r'(?<=[.!?])\s+(?=[А-ЯЁA-Z«"\d])')
+INSTANCE_ID_RE = re.compile(r"(?:№|n[oо]\.?)\s*\d+|\b\d{5,}\b", re.IGNORECASE)
 MIN_RETRIEVAL_SCORE = 2.0
-SEARCH_TIMEOUT_SECONDS = 15.0
+SEARCH_TIMEOUT_SECONDS = 30.0
+CATALOG_NOISE = "закупочные процедуры личный кабинет пользователя портал поставщиков карточка работа"
 # How many candidates each Mongo search stage contributes to the pool that gets
 # reranked in Python (below). numCandidates is oversampled relative to limit,
 # as Atlas Vector Search recommends, since it just controls recall internally.
 CANDIDATE_LIMIT = 50
+RERANK_LIMIT = 24
 VECTOR_NUM_CANDIDATES = 400
 # Expand language, not support topics: the subject (including «поставщик»)
 # must remain in the query even when it also appears in the portal name.
@@ -31,6 +36,7 @@ SEARCH_SYNONYMS = (
     ("сведения", "информация"),
     ("страница", "карточка"),
     ("возможности", "функциональность", "функционал"),
+    ("восстановить", "восстановление"),
 )
 ROOT_ALIASES = {
     root_ru(stem): root_ru(significant_stems(words[0])[0])
@@ -87,6 +93,115 @@ def _query_roots(text: str) -> set[str]:
     if ROOT_ALIASES[root_ru(significant_stems("сведения")[0])] in roots:
         roots.discard(ROOT_ALIASES[root_ru(significant_stems("найти")[0])])
     return roots
+
+
+@lru_cache(maxsize=1)
+def _catalog_topic_index() -> tuple[tuple[frozenset[str], frozenset[str], str], ...]:
+    noise = _query_roots(CATALOG_NOISE)
+    rows: list[tuple[frozenset[str], frozenset[str], str]] = []
+    for topic in load_knowledge().topics:
+        title_roots = frozenset(_query_roots(topic.title)) - noise
+        section_roots = frozenset(_query_roots(topic.section)) - noise
+        if len(title_roots | section_roots) >= 2:
+            rows.append((title_roots, section_roots, topic.title))
+    return tuple(rows)
+
+
+def _catalog_boost_titles(query: str) -> list[str]:
+    qroots = _query_roots(query) - _query_roots(CATALOG_NOISE)
+    if not qroots:
+        return []
+    min_overlap = 1 if len(qroots) == 1 else 2
+    index = _catalog_topic_index()
+    df: dict[str, int] = {}
+    for title_roots, section_roots, _title in index:
+        for root in title_roots | section_roots:
+            df[root] = df.get(root, 0) + 1
+    scored: list[tuple[float, str]] = []
+    for title_roots, section_roots, title in index:
+        overlap = qroots & (title_roots | section_roots)
+        title_overlap = qroots & title_roots
+        if len(overlap) < min_overlap:
+            continue
+        if min_overlap == 1 and not title_overlap:
+            continue
+        scored.append(
+            (
+                len(title_overlap) * 2 + len(overlap) + sum(1.0 / df[root] for root in overlap),
+                title,
+            )
+        )
+    scored.sort(key=lambda item: item[0], reverse=True)
+    query_cf = query.casefold()
+    for _score, title in scored:
+        if title.casefold() not in query_cf:
+            return [title]
+    return []
+
+
+def _has_catalog_title(query: str) -> bool:
+    query_cf = query.casefold()
+    return any(
+        len(title.split()) >= 3 and title.casefold() in query_cf
+        for _title_roots, _section_roots, title in _catalog_topic_index()
+    )
+
+
+def _exact_catalog_section(query: str) -> str:
+    needle = query.casefold()
+    for topic in load_knowledge().topics:
+        if topic.title.casefold() == needle and topic.section.strip():
+            return topic.section.strip()
+    return ""
+
+
+def _prepare_retrieval_query(query: str) -> str:
+    cleaned = INSTANCE_ID_RE.sub(" ", query)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    base = cleaned or query.strip()
+    exact_section = _exact_catalog_section(base)
+    if exact_section:
+        return f"{exact_section} {base}"
+    if _has_catalog_title(base):
+        return base
+    titles = _catalog_boost_titles(base)
+    if titles:
+        return f"{' '.join(titles)} {base}"
+    return base
+
+
+def _text_search_stage(query: str) -> dict[str, Any]:
+    return {
+        "$search": {
+            "index": TEXT_INDEX_NAME,
+            "compound": {
+                "should": [
+                    {"text": {"query": query, "path": "text"}},
+                    {
+                        "text": {
+                            "query": query,
+                            "path": "section_title",
+                            "score": {"boost": {"value": 4}},
+                        }
+                    },
+                ],
+                "minimumShouldMatch": 1,
+            },
+        }
+    }
+
+
+def _rerank_passage(hit: dict[str, Any]) -> str:
+    heading = " ".join(
+        part
+        for part in (
+            str(hit.get("section_number") or "").strip(),
+            str(hit.get("section_title") or "").strip(),
+        )
+        if part
+    )
+    text = str(hit.get("text") or "")
+    return f"{heading}\n{text}" if heading else text
 
 
 def _sentences(text: str) -> list[str]:
@@ -273,6 +388,7 @@ class MemoryKnowledgeRetriever:
         self.chunks = chunks
 
     async def find(self, query: str, limit: int = 3) -> list[Chunk]:
+        query = _prepare_retrieval_query(query)
         ranked = [(score_chunk(query, chunk), chunk) for chunk in self.chunks]
         ranked = [item for item in ranked if item[0] >= MIN_RETRIEVAL_SCORE]
         ranked.sort(key=lambda item: item[0], reverse=True)
@@ -298,6 +414,7 @@ class MongoKnowledgeRetriever:
         self.embedder = embedder
 
     async def find(self, query: str, limit: int = 3) -> list[Chunk]:
+        query = _prepare_retrieval_query(query)
         if limit <= 0 or not _query_roots(query):
             return []
         try:
@@ -327,7 +444,7 @@ class MongoKnowledgeRetriever:
             {"$project": {"embedding": 0}},
         ]
         text_pipeline = [
-            {"$search": {"index": TEXT_INDEX_NAME, "text": {"query": query, "path": ["text", "section_title"]}}},
+            _text_search_stage(query),
             {"$limit": CANDIDATE_LIMIT},
             {"$project": {"embedding": 0}},
         ]
@@ -352,14 +469,23 @@ class MongoKnowledgeRetriever:
             hints.append(hit)
         if not hints:
             return []
-        documents = [str(hit.get("text") or "") for hit in hints]
+        prelim: list[tuple[float, dict[str, Any], Chunk]] = []
+        for hit in hints:
+            chunk = _chunk_from_raw(hit)
+            if chunk is None:
+                continue
+            prelim.append((score_chunk(query, chunk), hit, chunk))
+        prelim.sort(key=lambda item: item[0], reverse=True)
+        with_signal = [item for item in prelim if item[0] > 0]
+        shortlist = (with_signal or prelim)[: max(limit * 4, RERANK_LIMIT)]
+        documents = [_rerank_passage(hit) for _score, hit, _chunk in shortlist]
         reranked = await asyncio.to_thread(reranker_repository.rerank, query, documents)
-        chunks: list[Chunk] = []
-        for item in reranked[:limit]:
-            chunk = _chunk_from_raw(hints[item["corpus_id"]])
-            if chunk is not None:
-                chunks.append(chunk)
-        return chunks
+        scored: list[tuple[float, Chunk]] = []
+        for item in reranked:
+            lexical, _hit, chunk = shortlist[item["corpus_id"]]
+            scored.append((float(item["score"]) + 0.1 * lexical, chunk))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [chunk for _score, chunk in scored[:limit]]
 
     @staticmethod
     async def _fetch_continuations(anchor_doc: dict[str, Any], limit: int) -> list[Chunk]:

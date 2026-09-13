@@ -2,6 +2,7 @@ import json
 import re
 import time as tm
 from collections.abc import Awaitable, Callable
+from functools import lru_cache
 from dataclasses import dataclass, field
 from typing import Annotated, Literal, Protocol
 from uuid import uuid4
@@ -12,10 +13,11 @@ from pydantic_core import from_json
 
 from src.logging_ import logger
 from src.modules.dialog.abuse import has_profanity_or_insult, has_working_request, preferred_rephrase, usable_rephrase
-from src.modules.dialog.classify import is_open_help, reports_ui_defect
+from src.modules.dialog.catalog import load_knowledge
+from src.modules.dialog.classify import is_open_help, needs_operator, reports_ui_defect
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import ABBREVIATIONS, significant_stems
-from src.modules.dialog.retrieval import KnowledgeRetriever, clean_source_text
+from src.modules.dialog.retrieval import KnowledgeRetriever, clean_source_text, score_chunk
 from src.modules.dialog.schemas import ClarificationQuestion, SupportLine, ToolCall, ToolStatus
 from src.pydantic_base import BaseSchema
 
@@ -36,7 +38,9 @@ AGENT_INSTRUCTIONS = """Ты — справочная поддержка Пор�
 «С чем помочь?» → Регистрация, Электронная подпись, Личный кабинет, Закупки, Контракты, Прайс-листы.
 Без поиска. Не «Что нужно по теме «поможешь»».
 
-3. Сообщение о сломанном интерфейсе: пропала кнопка, форма падает, элемент не работает → respond(kind="no_knowledge"). Не объясняй клики.
+3. Сломанный интерфейс (пропала кнопка, форма падает) или спор с модераторами
+(не согласуют, возвращают на доработку, «прошу решить») → respond(kind="no_knowledge").
+Не ищи инструкцию и не уточняй. Нужен специалист.
 
 4. Короткий запрос («регистрация», «МЧД», «хочу удалить») — сначала search_knowledge по теме.
 Потом ask_clarification: Конкретный вопрос по которому нужно уточнить → понятные сценарии
@@ -46,6 +50,7 @@ AGENT_INSTRUCTIONS = """Ты — справочная поддержка Пор�
 
 5. Понятный вопрос с действием или «что такое» («как зарегистрироваться», «что такое ИНН») → search_knowledge.
 Переформулируй query, сохраняя смысл и ключевые термины.
+Номера сессий, заявок и контрактов в справочнике нет — ищи процедуру (оферта, котировочная сессия), не номер.
 
 6. После search_knowledge:
 - sources описывают разные процедуры, а в вопросе нет выбора → ask_clarification, варианты из sources.section. Не склеивай несколько инструкций в один ответ;
@@ -53,9 +58,10 @@ AGENT_INSTRUCTIONS = """Ты — справочная поддержка Пор�
 - короткий запрос без объекта → ask_clarification по правилам инструмента;
 - пусто или нерелевантно → respond(kind="no_knowledge").
 Не копируй текст sources в варианты. Не уточняй, если sources уже сходятся в одну процедуру.
+«Не пришло / не получена оферта» — не проверка номера. Если sources про создание или публикацию оферты, ответь answer: кто создаёт, срок. Не no_knowledge.
 
 7. Если sources нет или они не отвечают на вопрос → respond(kind="no_knowledge").
-Не додумывай отсутствующие факты.
+Не додумывай отсутствующие факты. Не no_knowledge, если sources уже есть.
 
 8. Если пользователь просит выполнить действие («удали», «измени», «разблокируй») — никогда не утверждай, что сделал это. Если есть инструкция для самостоятельного выполнения, найди её; иначе no_knowledge.
 
@@ -188,7 +194,8 @@ def _tool(name: str, description: str, properties: dict, required: list[str]) ->
 TOOLS = [
     _tool(
         "search_knowledge",
-        "Найти инструкции портала по смысловому запросу (можешь переформулировать запрос).",
+        "Найти инструкции портала по смысловому запросу (можешь переформулировать запрос). "
+        "Номеров обращений в справочнике нет — ищи процедуру, не номер сессии или заявки.",
         {"query": {"type": "string", "minLength": 2, "maxLength": 500}},
         ["query"],
     ),
@@ -396,8 +403,12 @@ class LlamaCppClient:
             trace.update(stage="model", round=round_number)
             if is_open_help(question):
                 allowed = {"ask_clarification"}
+            elif reports_ui_defect(question) or needs_operator(question):
+                allowed = {"respond"}
             elif evidence:
-                if _needs_disambiguation(question, evidence):
+                if _needs_disambiguation(question, evidence) or (
+                    _needs_fork(question) and len(_catalog_fork_options(question)) >= 2
+                ):
                     allowed = {"ask_clarification"}
                 elif _needs_fork(question):
                     allowed = {"ask_clarification", "respond"}
@@ -447,10 +458,10 @@ class LlamaCppClient:
                 except ValueError:
                     result = {"error": "Нужен непустой вопрос и 2–6 уникальных вариантов."}
                 else:
-                    if reports_ui_defect(question):
+                    if reports_ui_defect(question) or needs_operator(question):
                         result = {
-                            "error": "Пользователь уже описал сбой интерфейса. "
-                            "Не уточняй кнопку или карточку. respond kind=no_knowledge без citation_ids."
+                            "error": "Это не инструкция из справочника. "
+                            "respond kind=no_knowledge без citation_ids."
                         }
                     elif not evidence:
                         if is_open_help(question):
@@ -467,6 +478,7 @@ class LlamaCppClient:
                         not _is_type_fork(clarification)
                         or _echo_options(question, clarification.options)
                         or _is_generic_intent_card(clarification.options)
+                        or any(not _usable_option(option, _topic_label(question)) for option in clarification.options)
                     ):
                         grounded = _clarification_from_evidence(question, evidence)
                         if grounded is not None:
@@ -501,6 +513,18 @@ class LlamaCppClient:
                     reply = None
                     result = {
                         "error": "Это сбой интерфейса, не инструкция «как нажать». "
+                        "respond kind=no_knowledge без citation_ids."
+                    }
+                elif reply is not None and reply.kind == "answer" and needs_operator(question):
+                    reply = None
+                    result = {
+                        "error": "Это разбор конкретной заявки модераторами, не инструкция. "
+                        "respond kind=no_knowledge без citation_ids."
+                    }
+                elif reply is not None and reply.kind == "answer" and _asks_personal_fact(question):
+                    reply = None
+                    result = {
+                        "error": "Это данные конкретного аккаунта, не процедура справочника. "
                         "respond kind=no_knowledge без citation_ids."
                     }
                 elif (
@@ -538,7 +562,14 @@ class LlamaCppClient:
                         }
                 elif reply is not None and _is_tool_noise(reply.text):
                     result = {"error": "Не повторяй текст ошибки. " + _respond_hint(evidence)}
-                elif reply is not None and reply.kind == "conversation" and not reply.citation_ids and evidence:
+                elif (
+                    reply is not None
+                    and reply.kind in {"conversation", "no_knowledge"}
+                    and not reply.citation_ids
+                    and _evidence_covers(question, evidence)
+                    and not reports_ui_defect(question)
+                    and not _asks_personal_fact(question)
+                ):
                     result = {"error": "Источники уже есть. " + _respond_hint(evidence)}
                 elif reply is not None:
                     tool_call.result = {"status": "completed", **reply.model_dump(mode="json")}
@@ -571,7 +602,7 @@ class LlamaCppClient:
                     executed.add(key)
                     started = tm.monotonic()
                     try:
-                        chunks, error = await _execute(name, args, retriever, evidence)
+                        chunks, error = await _execute(name, args, retriever, evidence, question)
                     except httpx.HTTPError, OSError, RuntimeError:
                         logger.exception("Support agent tool failed: tool=%s round=%d", name, round_number)
                         tool_call.result = {"error": "Не удалось выполнить инструмент."}
@@ -759,7 +790,7 @@ class LlamaCppClient:
 
 ASKS_TERM_RE = re.compile(
     r"(?:какой|каков|какая)\s+срок|срок\s+\S.{0,40}(?:заявк|модерац|рассмотр|регистрац)"
-    r"|сколько\s+(?:рабочих\s+)?(?:дней|часов)",
+    r"|сколько\s+(?:рабочих\s+)?(?:дней|часов|будет\s+рассматрив|рассматрив)",
     re.IGNORECASE,
 )
 DURATION_RE = re.compile(
@@ -803,10 +834,17 @@ TOOL_NOISE_RE = re.compile(
 
 HANDBOOK_SECTION_RE = re.compile(r"^\d+(?:\.\d+)+\.?\s+[А-ЯЁA-Z]")
 JUNK_OPTION_RE = re.compile(
-    r"рисунок|блокок|при выборе|опци[яи]|форма\s+[«\"]|http|www\.",
+    r"рисунок|блокок|при выборе|опци[яи]|форма\s+[«\"]|http|www\.|"
+    r"кнопк|глоссар|<mark|модальн\w*\s+окн|уведомлен|схема рассмотрен|"
+    r"года\s*№|меню личного|блок с полям|^блок\b|данные по заявк|"
+    r"историческ|после чего",
     re.IGNORECASE,
 )
-WEAK_OPTION_RE = re.compile(r"^(?:после|при|если|когда|нажм|выбер|откро|страниц)", re.IGNORECASE)
+HANGING_OPTION_WORDS = frozenset({"на", "по", "для", "без", "в", "с", "и", "к", "ко", "от", "из", "со", "о", "об", "про", "через"})
+WEAK_OPTION_RE = re.compile(
+    r"^(?:после|при|если|когда|нажм|выбер|откро|страниц|выгруз|удал|в архив)",
+    re.IGNORECASE,
+)
 SECTION_FAMILY_RE = re.compile(r"^(\d+)(?:\.(\d+))?")
 GENERIC_INTENTS = frozenset({"как пройти", "статус заявки", "ошибка"})
 HELP_MENU = ClarificationQuestion(
@@ -863,6 +901,60 @@ def _is_help_menu(clarification: ClarificationQuestion) -> bool:
     return bool(re.search(r"чем помочь|с чем помочь|чем могу", clarification.question, re.IGNORECASE))
 
 
+def _asks_personal_fact(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\bя\b.{0,60}заблок|заблок\w*.{0,40}\bя\b|"
+            r"до какого (?:числа|года)|какого года",
+            question,
+            re.IGNORECASE,
+        )
+    )
+
+
+_ABBREV_EXPAND = {
+    "мчд": "машиночитаемая доверенность",
+    "упд": "универсальный передаточный документ",
+    "сте": "стандартная товарная единица",
+    "эп": "электронная подпись",
+    "эцп": "электронная подпись",
+}
+
+
+@lru_cache(maxsize=64)
+def _catalog_fork_options(question: str) -> list[str]:
+    qstems = set(significant_stems(question))
+    lowered = question.casefold()
+    for token, phrase in _ABBREV_EXPAND.items():
+        if token in qstems or re.search(rf"\b{token}\b", lowered):
+            qstems |= set(significant_stems(phrase))
+    if not qstems:
+        return []
+    options: list[str] = []
+    seen: set[str] = set()
+    for topic in load_knowledge().topics:
+        if topic.title.casefold() == "консультация":
+            continue
+        candidates = [topic.title]
+        if topic.section:
+            label = _short_option(topic.section)
+            if label:
+                candidates.append(label)
+        for raw in candidates:
+            label = raw.strip() if raw == topic.title else _short_option(raw)
+            stems = set(significant_stems(label))
+            if not (qstems & stems) or stems <= qstems:
+                continue
+            key = label.casefold()
+            if key in seen or not _usable_option(label, question):
+                continue
+            seen.add(key)
+            options.append(label)
+            if len(options) == 6:
+                return options
+    return options if len(options) >= 2 else []
+
+
 def _needs_fork(question: str) -> bool:
     """Short topic or action without an object — search, then offer a type-fork."""
     if is_open_help(question) or LOOKUP_RE.search(question) or _named_mutation(question):
@@ -876,24 +968,41 @@ def _topic_label(question: str) -> str:
 
 
 def _short_option(text: str) -> str:
+    text = re.sub(r"<[^>]+>", "", text)
     text = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", text).strip()
     text = re.sub(r"^рисунок\s+\d+\s*[–—-]\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"электронн\w*\s+подпис\w*", "ЭП", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+", " ", text).strip(' .:—-«»"')
+    text = re.sub(r"^[–—\-•*«»\"]+\s*", "", text)
+    text = re.sub(r"\s+", " ", text).strip(" .:—-«»\"")
     words = text.split()
-    if len(words) > 4:
-        last = words[-1].casefold().strip(".,:;«»\"")
-        words = words[-4:] if last in ABBREVIATIONS else words[:4]
-    while words and words[-1].casefold() in {"на", "по", "для", "без", "в", "с", "и"}:
+    while words and words[-1].casefold().strip(".,:;«»\"") in HANGING_OPTION_WORDS:
         words.pop()
-    text = " ".join(words)[:100]
+    text = " ".join(words)
+    if len(text) > 100:
+        text = text[:100].rsplit(" ", 1)[0].strip()
+        words = text.split()
+        while words and words[-1].casefold().strip(".,:;«»\"") in HANGING_OPTION_WORDS:
+            words.pop()
+        text = " ".join(words)
     return text[:1].upper() + text[1:] if text else text
+
+
+def _complete_option(label: str) -> bool:
+    words = label.split()
+    if not words:
+        return False
+    if words[-1].casefold().strip(".,:;«»\"") in HANGING_OPTION_WORDS:
+        return False
+    return label.count("«") == label.count("»")
 
 
 def _usable_option(label: str, topic: str) -> bool:
     if len(label) < 4 or label.casefold() == topic.casefold():
         return False
-    if JUNK_OPTION_RE.search(label) or WEAK_OPTION_RE.search(label) or label.endswith(("«", "»", '"', "(", "—")):
+    if JUNK_OPTION_RE.search(label) or WEAK_OPTION_RE.search(label) or label.endswith(("«", "»", '"', "(", "—", "№")):
+        return False
+    if re.search(r"\d{4}\s*года|№\s*\d", label, re.IGNORECASE):
+        return False
+    if not _complete_option(label):
         return False
     return bool(re.search(r"[А-Яа-яA-Za-z]{3,}", label))
 
@@ -912,6 +1021,8 @@ def _procedure_options(evidence: dict[str, Chunk], topic: str = "") -> list[str]
     seen: set[str] = set()
     for chunk in evidence.values():
         section = chunk.section.strip()
+        if not HANDBOOK_SECTION_RE.match(section):
+            continue
         label = _short_option(section)
         key = label.casefold()
         if not _usable_option(label, topic) or key in seen:
@@ -924,7 +1035,11 @@ def _procedure_options(evidence: dict[str, Chunk], topic: str = "") -> list[str]
 
 
 def _procedure_families(evidence: dict[str, Chunk]) -> set[str]:
-    return {family for chunk in evidence.values() if (family := _section_family(chunk.section))}
+    return {
+        family
+        for chunk in evidence.values()
+        if HANDBOOK_SECTION_RE.match(chunk.section.strip()) and (family := _section_family(chunk.section))
+    }
 
 
 NARROW_PHRASE_RE = re.compile(r"\b(?:на|по|для|про|без|через)\s+\w+", re.IGNORECASE)
@@ -946,12 +1061,15 @@ def _needs_disambiguation(question: str, evidence: dict[str, Chunk]) -> bool:
     """Sources describe several procedures and the question does not pick one."""
     if not evidence or is_open_help(question):
         return False
+    if re.search(r"что\s+такое", question, re.IGNORECASE) or _asks_for_term(question):
+        return False
     labels = _procedure_options(evidence)
     if len(labels) < 2:
         return False
     families = _procedure_families(evidence)
-    diverse = len(families) >= 2 if families else True
-    return diverse and not _question_selects_one(question, labels)
+    if len(families) < 2:
+        return False
+    return not _question_selects_one(question, labels)
 
 
 def _facet_options(evidence: dict[str, Chunk], topic: str) -> list[str]:
@@ -975,9 +1093,16 @@ def _clarification_from_evidence(question: str, evidence: dict[str, Chunk]) -> C
     if is_open_help(question) or _is_help_verb_topic(question):
         return help_menu_clarification()
     topic = _topic_label(question)
-    options = _procedure_options(evidence, topic)
-    if len(options) < 2:
-        options = _facet_options(evidence, topic)
+    if _needs_fork(question):
+        options = _catalog_fork_options(question)
+        if len(options) < 2:
+            options = _procedure_options(evidence, topic)
+    else:
+        options = _procedure_options(evidence, topic)
+        if len(options) < 2:
+            options = _facet_options(evidence, topic)
+        if len(options) < 2:
+            options = _catalog_fork_options(question)
     if len(options) < 2:
         return None
     prompt = (
@@ -987,6 +1112,10 @@ def _clarification_from_evidence(question: str, evidence: dict[str, Chunk]) -> C
     if not _is_type_fork(card):
         return None
     return card
+
+
+def _evidence_covers(question: str, evidence: dict[str, Chunk]) -> bool:
+    return any(score_chunk(question, chunk) >= 2.0 for chunk in evidence.values())
 
 
 def _may_clarify(question: str, evidence: dict[str, Chunk]) -> bool:
@@ -1004,7 +1133,7 @@ def _is_type_fork(clarification: ClarificationQuestion) -> bool:
         return False
     if _echo_options(question, clarification.options):
         return False
-    return all("?" not in option and len(option.split()) <= 4 for option in clarification.options)
+    return all("?" not in option and len(option.split()) <= 10 for option in clarification.options)
 
 
 def _named_mutation(question: str) -> bool:
@@ -1227,12 +1356,20 @@ async def _execute(
     args: dict,
     retriever: KnowledgeRetriever,
     evidence: dict[str, Chunk],
+    user_question: str,
 ) -> tuple[list[Chunk], str | None]:
     if name == "search_knowledge":
         query = args.get("query")
         if set(args) != {"query"} or not isinstance(query, str) or not 2 <= len(query.strip()) <= 500:
             return [], "query должен быть строкой длиной от 2 до 500 символов."
-        return await retriever.find(query.strip(), limit=6), None
+        search = query.strip()
+        question = user_question.strip()
+        if question and question.casefold() != search.casefold():
+            merged = f"{search} {question}"
+            search = merged if len(merged) <= 500 else question
+        chunks = await retriever.find(search, limit=6)
+        chunks.sort(key=lambda chunk: score_chunk(question or search, chunk), reverse=True)
+        return chunks, None
     return [], "Неизвестный инструмент. Доступны search_knowledge, read_section и respond."
 
 
@@ -1301,7 +1438,7 @@ def _parse_reply(raw: dict, evidence: dict[str, Chunk]) -> AgentReply | None:
     if not reply.text or reply.text.endswith(":"):
         return None
     reply.citation_ids = list(dict.fromkeys(item for item in reply.citation_ids if item in evidence))
-    if reply.kind == "conversation" and reply.citation_ids:
+    if reply.kind in {"conversation", "no_knowledge"} and reply.citation_ids:
         reply = RespondReply(kind="answer", text=reply.text, citation_ids=reply.citation_ids)
     if reply.kind == "answer" and not reply.citation_ids:
         return None

@@ -73,6 +73,29 @@ def reports_ui_defect(text: str) -> bool:
     return bool(UI_DEFECT_RE.search(text))
 
 
+LOOKUP_OPERATOR_RE = re.compile(
+    r"\b(?:как|почему|зачем|где)\b|что\s+(?:такое|указать|писать|делать|нужно)",
+    re.IGNORECASE,
+)
+OPERATOR_ASK_RE = re.compile(
+    r"прошу\s+(?:решить|разобрать|вмешаться|принять|согласовать)|"
+    r"решите\s+(?:данный\s+)?вопрос|разберитесь",
+    re.IGNORECASE,
+)
+OPERATOR_STUCK_RE = re.compile(
+    r"модератор|не\s+согласу|на\s+доработ|возвраща\w+\s+(?:ее|её|заявк)|все\s+никак\s+не",
+    re.IGNORECASE,
+)
+
+
+def needs_operator(text: str) -> bool:
+    """Moderator dispute / «прошу решить» — not a handbook how-to."""
+    text = re.sub(r"\bни\s+как\b", "никак", text, flags=re.IGNORECASE)
+    if LOOKUP_OPERATOR_RE.search(text):
+        return False
+    return bool(OPERATOR_ASK_RE.search(text) and OPERATOR_STUCK_RE.search(text))
+
+
 def _is_help_stem(stem: str) -> bool:
     return stem.startswith(("помог", "помож", "помощ", "подскаж")) or stem == "help"
 
