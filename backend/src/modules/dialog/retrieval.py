@@ -337,7 +337,7 @@ class MongoKnowledgeRetriever:
         reranked = reranker_repository.rerank(query, documents)[:limit]
         chunks = []
         for index in reranked:
-            hit = documents[index["corpus_id"]]
+            hit = hints[index["corpus_id"]]
             chunks.append(
                 Chunk.model_construct(
                     id=hit["id"],
