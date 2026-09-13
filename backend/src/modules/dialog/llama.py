@@ -14,7 +14,7 @@ from pydantic_core import from_json
 from src.logging_ import logger
 from src.modules.dialog.abuse import has_profanity_or_insult, has_working_request, preferred_rephrase, usable_rephrase
 from src.modules.dialog.catalog import load_knowledge
-from src.modules.dialog.classify import is_open_help, needs_operator, reports_ui_defect
+from src.modules.dialog.classify import is_open_help, reports_ui_defect
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.normalize import ABBREVIATIONS, significant_stems
 from src.modules.dialog.retrieval import KnowledgeRetriever, clean_source_text, score_chunk
@@ -38,9 +38,7 @@ AGENT_INSTRUCTIONS = """Ты — справочная поддержка Пор�
 «С чем помочь?» → Регистрация, Электронная подпись, Личный кабинет, Закупки, Контракты, Прайс-листы.
 Без поиска. Не «Что нужно по теме «поможешь»».
 
-3. Сломанный интерфейс (пропала кнопка, форма падает) или спор с модераторами
-(не согласуют, возвращают на доработку, «прошу решить») → respond(kind="no_knowledge").
-Не ищи инструкцию и не уточняй. Нужен специалист.
+3. Сообщение о сломанном интерфейсе: пропала кнопка, форма падает, элемент не работает → respond(kind="no_knowledge"). Не объясняй клики.
 
 4. Короткий запрос («регистрация», «МЧД», «хочу удалить») — сначала search_knowledge по теме.
 Потом ask_clarification: Конкретный вопрос по которому нужно уточнить → понятные сценарии
@@ -403,7 +401,7 @@ class LlamaCppClient:
             trace.update(stage="model", round=round_number)
             if is_open_help(question):
                 allowed = {"ask_clarification"}
-            elif reports_ui_defect(question) or needs_operator(question):
+            elif reports_ui_defect(question):
                 allowed = {"respond"}
             elif evidence:
                 if _needs_disambiguation(question, evidence) or (
@@ -458,10 +456,10 @@ class LlamaCppClient:
                 except ValueError:
                     result = {"error": "Нужен непустой вопрос и 2–6 уникальных вариантов."}
                 else:
-                    if reports_ui_defect(question) or needs_operator(question):
+                    if reports_ui_defect(question):
                         result = {
-                            "error": "Это не инструкция из справочника. "
-                            "respond kind=no_knowledge без citation_ids."
+                            "error": "Пользователь уже описал сбой интерфейса. "
+                            "Не уточняй кнопку или карточку. respond kind=no_knowledge без citation_ids."
                         }
                     elif not evidence:
                         if is_open_help(question):
@@ -513,12 +511,6 @@ class LlamaCppClient:
                     reply = None
                     result = {
                         "error": "Это сбой интерфейса, не инструкция «как нажать». "
-                        "respond kind=no_knowledge без citation_ids."
-                    }
-                elif reply is not None and reply.kind == "answer" and needs_operator(question):
-                    reply = None
-                    result = {
-                        "error": "Это разбор конкретной заявки модераторами, не инструкция. "
                         "respond kind=no_knowledge без citation_ids."
                     }
                 elif reply is not None and reply.kind == "answer" and _asks_personal_fact(question):

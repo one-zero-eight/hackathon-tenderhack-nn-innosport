@@ -21,7 +21,6 @@ from src.modules.dialog.classify import (
     is_open_help,
     is_smalltalk,
     is_thanks,
-    needs_operator,
     reports_ui_defect,
 )
 from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient, TextCallback, ToolCallback, as_user_message
@@ -346,7 +345,7 @@ class DialogService:
                 reason=None,
                 line=None,
             )
-        if pending is None and (reports_ui_defect(text) or needs_operator(text)):
+        if pending is None and reports_ui_defect(text):
             return self._finish(
                 state,
                 reply=NO_KNOWLEDGE_REPLY,
