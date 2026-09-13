@@ -6,7 +6,6 @@ from pathlib import PurePosixPath
 from typing import Any, Protocol
 
 from beanie import PydanticObjectId
-from flashrank import RerankRequest
 
 from src.logging_ import logger
 from src.modules.dataset.reranker import reranker_repository
@@ -303,7 +302,6 @@ class MongoKnowledgeRetriever:
             return []
 
     async def _find(self, query: str, limit: int) -> list[Chunk]:
-        print("Run find")
         collection = KnowledgeChunk.get_motor_collection()
         query_vector = await asyncio.to_thread(self.embedder.embed_query, query)
 
@@ -331,8 +329,17 @@ class MongoKnowledgeRetriever:
             collection.aggregate(text_pipeline).to_list(length=CANDIDATE_LIMIT),
         )
 
-        hints = vector_hits + text_hits
-        print(len(hints))
+        # The same chunk often surfaces via both channels (vector + text) -
+        # dedupe by _id before reranking so it can't be returned twice.
+        hints: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for hit in vector_hits + text_hits:
+            hit_id = str(hit["_id"])
+            if hit_id in seen_ids:
+                continue
+            seen_ids.add(hit_id)
+            hints.append(hit)
+
         documents = [hit["text"] for hit in hints]
         reranked = reranker_repository.rerank(query, documents)[:limit]
         chunks = []
@@ -340,7 +347,7 @@ class MongoKnowledgeRetriever:
             hit = hints[index["corpus_id"]]
             chunks.append(
                 Chunk.model_construct(
-                    id=hit["id"],
+                    id=str(hit["id"]),
                     text=hit["text"],
                     document=str(PurePosixPath(hit["path"]).name),
                     section="Раздел не указан",
