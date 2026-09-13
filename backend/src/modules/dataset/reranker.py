@@ -21,7 +21,7 @@ class RerankerRepository:
             MODEL_DIR.mkdir(parents=True, exist_ok=True)
             logger.info("Downloading reranker %s into %s", MODEL_ID, MODEL_DIR)
             path = snapshot_download(MODEL_ID, local_dir=str(MODEL_DIR))
-        self.ranker = CrossEncoder(path, max_length=512)
+        self.ranker = CrossEncoder(path, max_length=512, device="cpu")
         logger.info("Reranker loaded from %s", path)
 
     def rerank(self, query: str, documents: list[str]):

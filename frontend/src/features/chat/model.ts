@@ -197,15 +197,22 @@ export function pendingSuggestedRephraseMessageId(chat: Chat): string | undefine
   return undefined
 }
 
-export function isToolCall(value: unknown): value is ToolCall {
-  return isRecord(value) && isNonemptyString(value.id) && isNonemptyString(value.name) && isRecord(value.arguments) && isRecord(value.result)
+export function isToolCall(value: unknown, { preparing = false }: { preparing?: boolean } = {}): value is ToolCall {
+  return (
+    isRecord(value) &&
+    isNonemptyString(value.id) &&
+    (isNonemptyString(value.name) || (preparing && value.name === '')) &&
+    (value.reason === undefined || typeof value.reason === 'string') &&
+    isRecord(value.arguments) &&
+    isRecord(value.result)
+  )
 }
 
 export function isChatReply(value: unknown): value is ChatReply {
   return (
     isRecord(value) &&
     typeof value.content === 'string' &&
-    (value.toolCalls === undefined || (Array.isArray(value.toolCalls) && value.toolCalls.every(isToolCall))) &&
+    (value.toolCalls === undefined || (Array.isArray(value.toolCalls) && value.toolCalls.every((call: unknown) => isToolCall(call)))) &&
     (value.citations === undefined ||
       (Array.isArray(value.citations) && value.citations.every((citation: unknown) => isRecord(citation) && typeof citation.document === 'string' && typeof citation.section === 'string' && typeof citation.path === 'string'))) &&
     (value.kind === undefined || isMessageKind(value.kind)) &&
@@ -223,7 +230,7 @@ function isStoredMessage(value: unknown): value is Omit<ChatMessage, 'kind'> & {
     isNonemptyString(value.id) &&
     (value.role === 'user' || value.role === 'assistant') &&
     typeof value.content === 'string' &&
-    (value.toolCalls === undefined || (Array.isArray(value.toolCalls) && value.toolCalls.every(isToolCall))) &&
+    (value.toolCalls === undefined || (Array.isArray(value.toolCalls) && value.toolCalls.every((call: unknown) => isToolCall(call)))) &&
     (value.citations === undefined ||
       (Array.isArray(value.citations) && value.citations.every((citation: unknown) => isRecord(citation) && typeof citation.document === 'string' && typeof citation.section === 'string' && typeof citation.path === 'string'))) &&
     (value.kind === undefined || value.kind === 'clarification' || isMessageKind(value.kind)) &&

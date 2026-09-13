@@ -624,6 +624,11 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
             /** Arguments */
             arguments: {
                 [key: string]: unknown;
@@ -1031,7 +1036,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description NDJSON events: provisional text, tool execution statuses, then a saved response or an error. */
+            /** @description NDJSON events: provisional text, tool snapshots with streaming reason and execution status, then a saved response or an error. */
             200: {
                 headers: {
                     [name: string]: unknown;

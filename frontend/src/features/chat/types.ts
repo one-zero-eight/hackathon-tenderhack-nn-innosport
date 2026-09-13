@@ -35,6 +35,7 @@ export interface ChatFeedback {
 export interface ToolCall {
   id: string
   name: string
+  reason?: string
   arguments: Record<string, unknown>
   result: Record<string, unknown>
 }

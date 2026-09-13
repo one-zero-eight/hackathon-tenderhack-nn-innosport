@@ -125,7 +125,7 @@ async def post_message(dialog_id: str, payload: MessageCreate, service: DialogSe
     responses={
         200: {
             "model": DialogStreamEvent,
-            "description": "NDJSON events: provisional text, tool execution statuses, then a saved response or an error.",
+            "description": "NDJSON events: provisional text, tool snapshots with streaming reason and execution status, then a saved response or an error.",
             "content": {"application/x-ndjson": {}},
         }
     },

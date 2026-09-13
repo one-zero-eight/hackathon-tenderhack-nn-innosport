@@ -29,6 +29,7 @@ class Citation(BaseSchema):
 class ToolCall(BaseSchema):
     id: str
     name: str
+    reason: str = ""
     arguments: dict[str, Any]
     result: dict[str, Any]
 

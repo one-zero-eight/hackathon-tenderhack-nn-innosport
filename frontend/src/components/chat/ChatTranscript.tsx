@@ -47,42 +47,55 @@ const toolActivityLabels: Record<string, string> = {
 
 function ToolActivity({ message }: { message: ChatMessage }) {
   const calls = message.toolCalls ?? []
-  const running = message.pending ? calls.find((call) => ['preparing', 'running'].includes(toolStatus(call, true))) : undefined
+  const running = message.pending ? [...calls].reverse().find((call) => ['preparing', 'running'].includes(toolStatus(call, true))) : undefined
+  const activityLabel = running?.name ? (toolStatus(running, true) === 'preparing' ? 'Подготовка вызова…' : (toolActivityLabels[running.name] ?? 'Выполняется…')) : 'Выбор действия…'
   return (
-    <details className="group/activity mb-2 text-xs">
-      <summary className="text-foreground/40 hover:text-foreground/65 focus-visible:outline-primary flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded py-1 focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden">
-        {running ? <LuLoaderCircle aria-hidden="true" className="size-3 shrink-0 animate-spin motion-reduce:animate-none" /> : <LuWrench aria-hidden="true" className="size-3 shrink-0" />}
-        <span aria-live={message.pending ? 'polite' : 'off'}>{running ? `${toolStatus(running, true) === 'preparing' ? 'Подготовка вызова' : (toolActivityLabels[running.name] ?? 'Выполняется')} · ${running.name}` : 'Детали ответа'}</span>
-        <LuChevronDown aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/activity:rotate-180 motion-reduce:transition-none" />
-      </summary>
-      <ol aria-label="Вызовы инструментов" className="border-foreground/10 mt-1 max-h-72 space-y-2 overflow-y-auto border-l pl-3">
-        {calls.map((call) => {
-          const status = toolStatus(call, message.pending)
-          const { label, Icon, className } = toolStatuses[status]
-          return (
-            <li key={call.id} className="min-w-0">
-              <details>
-                <summary className="text-foreground/55 focus-visible:outline-primary flex cursor-pointer list-none flex-wrap items-center gap-1.5 rounded py-1 focus-visible:outline-2 [&::-webkit-details-marker]:hidden">
-                  <Icon aria-hidden="true" className={`size-3 shrink-0 ${className} ${['preparing', 'running'].includes(status) ? 'animate-spin motion-reduce:animate-none' : ''}`} />
-                  <code className="break-all">{call.name}</code>
-                  <span className={className}>{label}</span>
-                </summary>
-                <div className="text-foreground/55 py-2">
-                  <p className="mb-1">Аргументы</p>
-                  <pre className="mb-2 font-mono break-words whitespace-pre-wrap">{JSON.stringify(call.arguments, null, 2)}</pre>
-                  {!['preparing', 'running'].includes(status) && (
-                    <>
-                      <p className="mb-1">Результат</p>
-                      <pre className="font-mono break-words whitespace-pre-wrap">{JSON.stringify(call.result, null, 2)}</pre>
-                    </>
-                  )}
-                </div>
-              </details>
-            </li>
-          )
-        })}
-      </ol>
-    </details>
+    <div className="mb-2 text-xs">
+      {running && (
+        <div role="status" className="text-foreground/45 mb-2 py-1">
+          <div className="flex items-center gap-1.5">
+            <LuLoaderCircle aria-hidden="true" className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
+            <span>{activityLabel}</span>
+          </div>
+          {running.reason?.trim() && <p className="mt-1.5 leading-5 break-words whitespace-pre-wrap">{running.reason}</p>}
+        </div>
+      )}
+      <details className="group/activity">
+        <summary className="text-foreground/40 hover:text-foreground/65 focus-visible:outline-primary flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded py-1 focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden">
+          <LuWrench aria-hidden="true" className="size-3 shrink-0" />
+          <span>Детали ответа</span>
+          <LuChevronDown aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/activity:rotate-180 motion-reduce:transition-none" />
+        </summary>
+        <ol aria-label="Вызовы инструментов" className="border-foreground/10 mt-1 max-h-72 space-y-2 overflow-y-auto border-l pl-3">
+          {calls.map((call) => {
+            const status = toolStatus(call, message.pending)
+            const { label, Icon, className } = toolStatuses[status]
+            return (
+              <li key={call.id} className="min-w-0">
+                {call.reason?.trim() && <p className="text-foreground/45 mb-1 leading-5 break-words whitespace-pre-wrap">{call.reason}</p>}
+                <details>
+                  <summary className="text-foreground/55 focus-visible:outline-primary flex cursor-pointer list-none flex-wrap items-center gap-1.5 rounded py-1 focus-visible:outline-2 [&::-webkit-details-marker]:hidden">
+                    <Icon aria-hidden="true" className={`size-3 shrink-0 ${className} ${['preparing', 'running'].includes(status) ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+                    {call.name ? <code className="break-all">{call.name}</code> : <span>Выбор действия…</span>}
+                    {call.name && <span className={className}>{label}</span>}
+                  </summary>
+                  <div className="text-foreground/55 py-2">
+                    <p className="mb-1">Аргументы</p>
+                    <pre className="mb-2 font-mono break-words whitespace-pre-wrap">{JSON.stringify(call.arguments, null, 2)}</pre>
+                    {!['preparing', 'running'].includes(status) && (
+                      <>
+                        <p className="mb-1">Результат</p>
+                        <pre className="font-mono break-words whitespace-pre-wrap">{JSON.stringify(call.result, null, 2)}</pre>
+                      </>
+                    )}
+                  </div>
+                </details>
+              </li>
+            )
+          })}
+        </ol>
+      </details>
+    </div>
   )
 }
 

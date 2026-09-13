@@ -408,7 +408,7 @@ class LlamaCppClient:
             if not isinstance(args, dict) or not isinstance(call_id, str) or not isinstance(name, str):
                 return None
             # Keep the complete trace outside messages, which are compacted for the model.
-            tool_call = ToolCall(id=call_id, name=name, arguments=args, result={})
+            tool_call = ToolCall(id=call_id, name=name, reason=call["reason"], arguments=args, result={})
             tool_calls.append(tool_call)
             if on_tool is not None:
                 await on_tool(tool_call.model_copy(deep=True), "running")
@@ -617,6 +617,7 @@ class LlamaCppClient:
                 {
                     "id": call_id,
                     "type": "function",
+                    "reason": action["reason"],
                     "function": {
                         "name": action["name"],
                         "arguments": json.dumps(action["arguments"], ensure_ascii=False),
@@ -669,16 +670,21 @@ class LlamaCppClient:
                     finish_reason = reason
                 if on_tool is not None and delta:
                     try:
-                        partial = from_json(content, allow_partial=True)
+                        partial = from_json(content, allow_partial="trailing-strings")
                     except ValueError:
                         partial = None
-                    if isinstance(partial, dict) and partial.get("name") in {
-                        tool["function"]["name"] for tool in TOOLS
-                    }:
+                    if isinstance(partial, dict):
+                        name = partial.get("name")
+                        if not isinstance(name, str) or name not in {tool["function"]["name"] for tool in TOOLS}:
+                            name = ""
+                        action_reason = partial.get("reason", "")
+                        if not isinstance(action_reason, str):
+                            return None
                         args = partial.get("arguments", {})
                         current = ToolCall(
                             id=call_id,
-                            name=partial["name"],
+                            name=name,
+                            reason=action_reason,
                             arguments=args if isinstance(args, dict) else {},
                             result={},
                         )
