@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -62,6 +63,17 @@ INSULTS = frozenset(
         "ебланы",
         "пидор",
         "пидоры",
+        "пидарас",
+        "пидорас",
+        "гнойный",
+        "гнойная",
+        "гнойные",
+        "гнида",
+        "гниды",
+        "мразь",
+        "мрази",
+        "тварь",
+        "твари",
         "долбоеб",
         "долбоебы",
     }
@@ -72,6 +84,7 @@ INSULT_STEMS = frozenset(stem_ru(item) for item in INSULTS if len(stem_ru(item))
 PROFANE_ROOTS = frozenset(
     {
         "еба",
+        "ебе",
         "ебл",
         "ебу",
         "еби",
@@ -79,12 +92,20 @@ PROFANE_ROOTS = frozenset(
         "хуя",
         "хуе",
         "пизд",
+        "пидор",
+        "пидар",
         "бляд",
         "блят",
         "муда",
         "заеб",
+        "гнойн",
+        "гнид",
+        "мраз",
+        "твар",
     }
 )
+REPEAT_RE = re.compile(r"(.)\1+")
+ADDRESS_PREFIX = frozenset({"ты", "вы", "тебя", "тебе", "тобой", "твой", "твоя", "твое", "ваш", "ваша", "ваше"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,27 +139,40 @@ def _stem_hits(token_stem: str, stems: frozenset[str]) -> bool:
     return token_stem in stems
 
 
+def _fold_token(token: str) -> str:
+    # «пидараас» / «ебееть» collapse to a matchable slur form.
+    return REPEAT_RE.sub(r"\1", token.lower().replace("ё", "е"))
+
+
+def _match_forms(token: str) -> tuple[str, ...]:
+    folded = _fold_token(token)
+    return tuple(dict.fromkeys((token, folded, stem_ru(token), stem_ru(folded))))
+
+
 def _has_profane_root(token: str) -> bool:
-    forms = (token, stem_ru(token))
-    return any(form.startswith(root) for form in forms for root in PROFANE_ROOTS if len(form) >= len(root))
+    return any(form.startswith(root) for form in _match_forms(token) for root in PROFANE_ROOTS if len(form) >= len(root))
 
 
 def _is_flagged_token(token: str, words: frozenset[str], stems: frozenset[str]) -> bool:
-    if token in INSULTS or stem_ru(token) in INSULT_STEMS or _has_profane_root(token):
+    forms = _match_forms(token)
+    if any(form in INSULTS or stem_ru(form) in INSULT_STEMS for form in forms) or _has_profane_root(token):
         return True
-    if token in words or _stem_hits(stem_ru(token), stems):
+    if any(form in words or _stem_hits(stem_ru(form), stems) for form in forms):
         return True
-    for prefix in PREFIXES:
-        if token.startswith(prefix):
-            rest = token[len(prefix) :]
-            if len(rest) >= 3 and rest in words:
-                return True
+    for form in forms:
+        for prefix in PREFIXES:
+            if form.startswith(prefix):
+                rest = form[len(prefix) :]
+                if len(rest) >= 3 and rest in words:
+                    return True
     return False
 
 
 def working_remainder(text: str, *, lexicon_path: Path | None = None) -> str:
     words, stems = load_lexicon(lexicon_path)
     kept = [token for token in tokenize(text, map_latin=True) if not _is_flagged_token(token, words, stems)]
+    while kept and kept[0] in ADDRESS_PREFIX:
+        kept = kept[1:]
     if not kept:
         return ""
     joined = " ".join(kept)
@@ -160,6 +194,21 @@ def usable_rephrase(text: str, *, lexicon_path: Path | None = None) -> str:
     if not remainder or has_profanity_or_insult(remainder, lexicon_path=lexicon_path):
         return ""
     return remainder
+
+
+def preferred_rephrase(question: str, model_text: str = "", *, lexicon_path: Path | None = None) -> str:
+    """Dictionary remainder is the rewrite. Keep a model phrasing only if it is a subset."""
+    remainder = usable_rephrase(question, lexicon_path=lexicon_path)
+    model = model_text.strip()
+    if model and has_profanity_or_insult(model, lexicon_path=lexicon_path):
+        model = ""
+    if remainder and model:
+        rem = set(tokenize(remainder, map_latin=True))
+        extra = set(tokenize(model, map_latin=True)) - rem
+        if extra:
+            return remainder
+        return model[0].upper() + model[1:]
+    return remainder or model
 
 
 def scan_abuse(text: str, *, lexicon_path: Path | None = None) -> AbuseScan:

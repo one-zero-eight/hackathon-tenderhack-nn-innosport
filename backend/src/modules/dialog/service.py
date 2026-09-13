@@ -8,7 +8,13 @@ from uuid import uuid4
 from fastapi import HTTPException, status
 
 from src.logging_ import logger
-from src.modules.dialog.abuse import has_profanity_or_insult, has_working_request, scan_abuse, usable_rephrase
+from src.modules.dialog.abuse import (
+    has_profanity_or_insult,
+    has_working_request,
+    preferred_rephrase,
+    scan_abuse,
+    usable_rephrase,
+)
 from src.modules.dialog.classify import is_capability_question, is_greeting, is_thanks, reports_ui_defect
 from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient, TextCallback, ToolCallback, as_user_message
 from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_answer
@@ -382,10 +388,7 @@ class DialogService:
             if on_tool is not None:
                 await on_tool(tool_call.model_copy(deep=True), "completed")
         if moderation is not None and moderation.verdict == "mixed":
-            leftover = as_user_message(moderation.cleaned_request)
-            if leftover and has_profanity_or_insult(leftover):
-                leftover = ""
-            leftover = leftover or usable_rephrase(text)
+            leftover = preferred_rephrase(text, as_user_message(moderation.cleaned_request))
             if leftover and not has_profanity_or_insult(leftover):
                 moderation = moderation.model_copy(update={"cleaned_request": leftover})
             elif has_profanity_or_insult(text) or scan.has_matches:

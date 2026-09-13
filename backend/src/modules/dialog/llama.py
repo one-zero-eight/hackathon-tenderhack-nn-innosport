@@ -11,7 +11,7 @@ from pydantic import Field, StringConstraints, ValidationError
 from pydantic_core import from_json
 
 from src.logging_ import logger
-from src.modules.dialog.abuse import has_profanity_or_insult, has_working_request, usable_rephrase
+from src.modules.dialog.abuse import has_profanity_or_insult, has_working_request, preferred_rephrase, usable_rephrase
 from src.modules.dialog.classify import reports_ui_defect
 from src.modules.dialog.models import Chunk
 from src.modules.dialog.retrieval import KnowledgeRetriever, clean_source_text
@@ -781,10 +781,7 @@ def _parse_moderation(raw: object, *, question: str) -> ModerationVerdict | None
         verdict = ModerationVerdict.model_validate(raw, strict=True)
     except ValidationError:
         return None
-    original = question.strip()
     cleaned = as_user_message(verdict.cleaned_request)
-    if cleaned and has_profanity_or_insult(cleaned):
-        cleaned = ""
     remainder = usable_rephrase(question)
     working = has_working_request(question) and bool(remainder)
     flagged = has_profanity_or_insult(question)
@@ -792,7 +789,7 @@ def _parse_moderation(raw: object, *, question: str) -> ModerationVerdict | None
         return ModerationVerdict(verdict="clean", cleaned_request="")
     if not working:
         return ModerationVerdict(verdict="pure_abuse", cleaned_request="")
-    candidate = cleaned if cleaned and cleaned.casefold() != original.casefold() else remainder
+    candidate = preferred_rephrase(question, cleaned)
     if not candidate or has_profanity_or_insult(candidate):
         return ModerationVerdict(verdict="pure_abuse", cleaned_request="")
     return ModerationVerdict(verdict="mixed", cleaned_request=candidate[:400])
