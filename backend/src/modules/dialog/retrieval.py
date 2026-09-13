@@ -342,7 +342,10 @@ class MongoKnowledgeRetriever:
         hints: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         for hit in vector_hits + text_hits:
-            hit_id = str(hit["id"])
+            raw_id = hit.get("_id")
+            if raw_id is None:
+                continue
+            hit_id = str(raw_id)
             if hit_id in seen_ids:
                 continue
             seen_ids.add(hit_id)
