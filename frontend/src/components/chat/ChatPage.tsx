@@ -107,7 +107,7 @@ export default function ChatPage() {
   )
   return (
     <div className="bg-background text-foreground flex h-dvh overflow-hidden">
-      <aside className="border-border hidden w-72 shrink-0 border-r md:block">{sidebar}</aside>
+      <aside className="border-border hidden w-96 shrink-0 border-r md:block">{sidebar}</aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
           <main className="relative flex min-w-0 flex-1 flex-col">
@@ -183,12 +183,14 @@ export default function ChatPage() {
                           </Button>
                         ) : undefined
                       }
+                      extra={
+                        isNewChat || chat.canContactSpecialist ? (
+                          <SpecialistContact key={activeChat.id} chat={activeChat} previewLine={transport.previewSpecialistLine} busy={!isNewChat && chat.busy} onContact={isNewChat ? (contact) => startRequest(() => chat.contactSpecialist(contact)) : chat.contactSpecialist} />
+                        ) : undefined
+                      }
                       onClose={() => void (isNewChat ? createTicket() : chat.closeChat())}
                       onNewChat={() => void createTicket()}
                     />
-                    {(isNewChat || chat.canContactSpecialist) && (
-                      <SpecialistContact key={activeChat.id} chat={activeChat} previewLine={transport.previewSpecialistLine} busy={!isNewChat && chat.busy} onContact={isNewChat ? (contact) => startRequest(() => chat.contactSpecialist(contact)) : chat.contactSpecialist} />
-                    )}
                     {!closed && (
                       <ChatComposer
                         autocomplete={transport.autocomplete}

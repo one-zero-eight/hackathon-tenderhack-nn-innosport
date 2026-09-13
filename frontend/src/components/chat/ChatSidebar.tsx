@@ -99,13 +99,22 @@ export default function ChatSidebar({
         {error && <p className="text-error text-ui-body px-3">{error}</p>}
         {!loading && !filtered.length && <p className="text-foreground/50 text-ui-body px-3">Обращения не найдены</p>}
       </nav>
-      <div className="border-border mx-4 space-y-1 border-t py-3">
-        <Button variant="ghost" color="error" size="sm" className="flex w-full items-center justify-center gap-1.5 px-2 py-1 text-xs font-medium" disabled={busy || !canDeleteAll} onClick={onDeleteAll}>
-          <LuTrash2 className="size-3.5" />
+      <div className="border-border space-y-2 border-t px-4 py-4">
+        <Button
+          variant="outline"
+          color="error"
+          className="flex w-full items-center justify-start gap-2 rounded-xl px-3 py-3 text-left font-semibold"
+          disabled={busy || !canDeleteAll}
+          onClick={onDeleteAll}
+        >
+          <LuTrash2 className="size-4 shrink-0" />
           Удалить все обращения
         </Button>
-        <Link to="/admin" className="text-foreground/60 hover:text-foreground hover:bg-background/70 focus-visible:ring-primary flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-2">
-          <LuLayoutDashboard aria-hidden="true" className="size-3.5" />
+        <Link
+          to="/admin"
+          className="border-border bg-background text-foreground hover:bg-surface focus-visible:ring-primary flex w-full items-center justify-start gap-2 rounded-xl border px-3 py-3 text-left font-semibold outline-none focus-visible:ring-2"
+        >
+          <LuLayoutDashboard aria-hidden="true" className="size-4 shrink-0" />
           В админку
         </Link>
       </div>

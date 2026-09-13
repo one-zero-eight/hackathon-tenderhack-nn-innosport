@@ -40,9 +40,9 @@ AGENT_INSTRUCTIONS = """Ты — справочная поддержка Пор�
 
 3. Сообщение о сломанном интерфейсе: пропала кнопка, форма падает, элемент не работает → respond(kind="no_knowledge"). Не объясняй клики.
 
-4. Короткий запрос («регистрация», «МЧД», «хочу удалить») — сначала search_knowledge по теме.
+4. Короткий запрос («регистрация», «МЧД», «сделать заявку», «как создать заявку») — сначала search_knowledge по теме.
 Потом ask_clarification: Конкретный вопрос по которому нужно уточнить → понятные сценарии
-(«Как пройти», «Статус заявки», «Ошибка»).
+(«Как пройти», «Статус заявки», «Ошибка»). «Как» не делает тему однозначной.
 Не «что именно», не ID/ИНН/пароль, не подтверждение. ask_clarification после ответа пользователя
 должен дать полезную информацию для следующих сообщений. не выдумывай варианты.
 
@@ -187,7 +187,6 @@ def _tool(name: str, description: str, properties: dict, required: list[str]) ->
             },
         },
     }
-
 
 TOOLS = [
     _tool(
@@ -913,15 +912,28 @@ _ABBREV_EXPAND = {
 }
 
 
+def _stems_align(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    shorter, longer = (left, right) if len(left) <= len(right) else (right, left)
+    return len(shorter) >= 4 and len(longer) - len(shorter) <= 2 and longer.startswith(shorter)
+
+
+def _stem_in(needle: str, haystack: set[str]) -> bool:
+    return any(_stems_align(needle, item) for item in haystack)
+
+
 @lru_cache(maxsize=64)
 def _catalog_fork_options(question: str) -> list[str]:
-    qstems = set(significant_stems(question))
+    typed = set(significant_stems(question))
     lowered = question.casefold()
+    expanded = set(typed)
     for token, phrase in _ABBREV_EXPAND.items():
-        if token in qstems or re.search(rf"\b{token}\b", lowered):
-            qstems |= set(significant_stems(phrase))
-    if not qstems:
+        if token in typed or re.search(rf"\b{token}\b", lowered):
+            expanded |= set(significant_stems(phrase))
+    if not typed:
         return []
+    qstems = expanded if typed <= set(_ABBREV_EXPAND) else typed
     options: list[str] = []
     seen: set[str] = set()
     for topic in load_knowledge().topics:
@@ -949,9 +961,20 @@ def _catalog_fork_options(question: str) -> list[str]:
 
 def _needs_fork(question: str) -> bool:
     """Short topic or action without an object — search, then offer a type-fork."""
-    if is_open_help(question) or LOOKUP_RE.search(question) or _named_mutation(question):
+    if is_open_help(question) or _named_mutation(question):
         return False
-    return len(significant_stems(question)) < 3
+    if re.search(r"что\s+такое", question, re.IGNORECASE) or _asks_for_term(question):
+        return False
+    stripped = re.sub(r"\bкак\b", " ", question, flags=re.IGNORECASE)
+    stripped = re.sub(r"\s+", " ", stripped).strip() or question
+    if LOOKUP_RE.search(stripped):
+        return False
+    if len(significant_stems(stripped)) >= 3:
+        return False
+    options = _catalog_fork_options(question)
+    if len(options) >= 2 and _question_selects_one(question, options):
+        return False
+    return len(significant_stems(stripped)) < 3
 
 
 def _topic_label(question: str) -> str:
@@ -1043,7 +1066,7 @@ def _question_selects_one(question: str, labels: list[str]) -> bool:
     label_stems = [set(significant_stems(label)) for label in labels]
     if len(label_stems) < 2:
         return True
-    unique = [stem for stem in query_stems if sum(stem in stems for stems in label_stems) == 1]
+    unique = [stem for stem in query_stems if sum(_stem_in(stem, stems) for stems in label_stems) == 1]
     if not unique:
         return False
     return bool(query_stems & ABBREVIATIONS) or bool(NARROW_PHRASE_RE.search(question))

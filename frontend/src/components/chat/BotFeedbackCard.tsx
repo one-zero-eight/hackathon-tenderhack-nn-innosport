@@ -1,15 +1,41 @@
 import { useId, useState } from 'react'
-import { LuCheck, LuMessageSquareHeart } from 'react-icons/lu'
+import { LuCheck, LuMessageSquareHeart, LuStar } from 'react-icons/lu'
 import Button from '@/components/ui/Button'
 import Textarea from '@/components/ui/Textarea'
-import type { Chat } from '@/features/chat/types'
+import type { Chat, FeedbackRating } from '@/features/chat/types'
 
-type Rating = 'complete' | 'partial' | 'irrelevant'
-const ratings: { value: Rating; label: string }[] = [
-  { value: 'complete', label: 'Ответил полностью' },
-  { value: 'partial', label: 'Неполный ответ' },
-  { value: 'irrelevant', label: 'Ответ не по теме' },
-]
+const COMMENT_MAX = 2000
+
+const STAR_COUNTS = [1, 2, 3, 4, 5] as const
+type StarCount = (typeof STAR_COUNTS)[number]
+
+const BADGES: Record<StarCount, string[]> = {
+  1: ['Медленный ответ', 'Ответ не по теме', 'Бот не сработал', 'Непонятный ответ', 'Не помог решить вопрос'],
+  2: ['Медленный ответ', 'Ответ почти не помог', 'Путаница в шагах', 'Мало деталей'],
+  3: ['Медленный ответ', 'Ответил не полностью', 'Не хватило примера', 'Пришлось уточнять'],
+  4: ['Полезный ответ', 'Почти всё понятно', 'Можно чуть быстрее', 'Небольшая неточность'],
+  5: ['Всё отлично', 'Быстрый ответ', 'Полный и точный ответ', 'Понятные шаги'],
+}
+
+const ratingLabels: Record<FeedbackRating, string> = {
+  complete: 'Ответил полностью',
+  partial: 'Неполный ответ',
+  irrelevant: 'Ответ не по теме',
+}
+
+function ratingFromStars(stars: StarCount): FeedbackRating {
+  if (stars <= 2) return 'irrelevant'
+  if (stars === 3) return 'partial'
+  return 'complete'
+}
+
+function formatFeedbackComment(stars: StarCount, badges: string[], note: string): string {
+  const head = `${stars} из 5`
+  const structured = badges.length > 0 ? `${head}. ${badges.join('. ')}.` : `${head}.`
+  const extra = note.trim()
+  const comment = extra ? `${structured} ${extra}` : structured
+  return comment.slice(0, COMMENT_MAX)
+}
 
 export default function BotFeedbackCard({
   feedback,
@@ -21,11 +47,13 @@ export default function BotFeedbackCard({
   feedback: Chat['feedback']
   waitingForSpecialist: boolean
   busy: boolean
-  onSubmit: (rating: Rating, comment: string) => Promise<boolean>
+  onSubmit: (rating: FeedbackRating, comment: string) => Promise<boolean>
   onDismiss: () => void
 }) {
-  const [rating, setRating] = useState<Rating | null>(null)
-  const [comment, setComment] = useState('')
+  const [stars, setStars] = useState<StarCount | null>(null)
+  const [hovered, setHovered] = useState<StarCount | null>(null)
+  const [badges, setBadges] = useState<string[]>([])
+  const [note, setNote] = useState('')
   const [error, setError] = useState(false)
   const id = useId()
   if (feedback)
@@ -35,10 +63,17 @@ export default function BotFeedbackCard({
           <LuCheck className="text-success size-4" />
           Спасибо за обратную связь!
         </p>
-        <p className="text-foreground/60 text-ui-body">Ваша оценка: {ratings.find((item) => item.value === feedback.rating)?.label}</p>
-        {feedback.comment && <p className="text-foreground/50 text-ui-body break-words whitespace-pre-wrap">{feedback.comment}</p>}
+        <p className="text-foreground/60 text-ui-body">Ваша оценка: {feedback.comment || ratingLabels[feedback.rating]}</p>
       </section>
     )
+
+  const options = stars === null ? [] : BADGES[stars]
+
+  const toggleBadge = (label: string) => {
+    setBadges((current) => (current.includes(label) ? current.filter((item) => item !== label) : [...current, label]))
+    setError(false)
+  }
+
   return (
     <section aria-labelledby={`${id}-title`} className="border-border bg-surface mt-6 rounded-2xl border p-5 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
@@ -53,44 +88,85 @@ export default function BotFeedbackCard({
       <form
         onSubmit={async (event) => {
           event.preventDefault()
-          if (!rating || busy) return
+          if (stars === null || busy) return
           setError(false)
-          setError(!(await onSubmit(rating, rating === 'complete' ? '' : comment.trim())))
+          setError(!(await onSubmit(ratingFromStars(stars), formatFeedbackComment(stars, badges, note))))
         }}
       >
-        <fieldset disabled={busy}>
-          <legend className="text-ui-body mb-3 font-medium">Оцените ответ</legend>
-          <div className="flex flex-wrap gap-2">
-            {ratings.map((item) => (
-              <label
-                key={item.value}
-                className={`has-focus-visible:ring-primary text-ui-body flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 has-focus-visible:ring-2 ${rating === item.value ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-surface-2'}`}
-              >
-                <input
-                  type="radio"
-                  name={`${id}-rating`}
-                  value={item.value}
-                  checked={rating === item.value}
-                  onChange={() => {
-                    setRating(item.value)
+        <fieldset disabled={busy} className="min-w-0">
+          <legend className="text-ui-body mb-3 w-full text-center font-medium">Оцените ответ</legend>
+          <div
+            role="radiogroup"
+            aria-label="Оценка от 1 до 5 звёзд"
+            className="flex justify-center gap-1 sm:gap-2"
+            onPointerLeave={() => setHovered(null)}
+          >
+            {STAR_COUNTS.map((value) => {
+              const preview = hovered ?? stars
+              const lit = preview !== null && value <= preview
+              const chosen = stars !== null && value <= stars
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={stars === value}
+                  aria-label={`${value} из 5`}
+                  onPointerEnter={() => setHovered(value)}
+                  onClick={() => {
+                    setStars(value)
+                    setBadges([])
                     setError(false)
-                    if (item.value === 'complete') setComment('')
                   }}
-                  className="accent-primary size-4"
-                />
-                {item.label}
-              </label>
-            ))}
+                  className={`focus-visible:ring-primary cursor-pointer rounded-xl p-2 touch-manipulation transition-transform duration-150 ease-out focus-visible:ring-2 focus-visible:outline-none motion-reduce:transition-none ${
+                    lit ? 'text-amber-500' : 'text-foreground/25'
+                  } hover:scale-110 active:scale-95 motion-reduce:hover:scale-100 motion-reduce:active:scale-100`}
+                >
+                  <LuStar className={`size-9 transition-[fill,color] duration-150 motion-reduce:transition-none sm:size-10 ${lit || chosen ? 'fill-current' : ''}`} />
+                </button>
+              )
+            })}
           </div>
-          {rating && rating !== 'complete' && (
-            <div className="mt-4 space-y-2">
-              <label htmlFor={`${id}-reason`} className="text-ui-body block font-medium">
-                Почему ответ не подошёл?
-              </label>
-              <Textarea id={`${id}-reason`} value={comment} onChange={(event) => setComment(event.target.value)} rows={3} maxLength={2000} placeholder="Расскажите, чего не хватило или что было не так…" aria-describedby={`${id}-optional`} />
-              <p id={`${id}-optional`} className="text-foreground/40 text-ui-small">
-                Необязательно
+          {stars !== null && (
+            <div className="mt-6">
+              <p id={`${id}-badges`} className="text-ui-body text-center font-medium">
+                Что совпало с вашей оценкой?
               </p>
+              <div role="group" aria-labelledby={`${id}-badges`} className="mt-5 mb-6 flex flex-wrap justify-center gap-2">
+                {options.map((label) => {
+                  const active = badges.includes(label)
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => toggleBadge(label)}
+                      className={`text-ui-small focus-visible:ring-primary cursor-pointer rounded-full border px-3 py-1.5 transition-colors duration-150 focus-visible:ring-2 focus-visible:outline-none motion-reduce:transition-none ${
+                        active ? 'border-primary bg-primary/10 text-primary' : 'border-border text-foreground/70 hover:bg-surface-2'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+              <div>
+                <label htmlFor={`${id}-note`} className="text-ui-body mb-2 block text-center font-medium">
+                  Комментарий
+                </label>
+                <Textarea
+                  id={`${id}-note`}
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  rows={3}
+                  maxLength={COMMENT_MAX}
+                  placeholder="Если хотите, добавьте подробности…"
+                  aria-describedby={`${id}-note-hint`}
+                />
+                <p id={`${id}-note-hint`} className="text-foreground/40 text-ui-small mt-1 text-center">
+                  Необязательно. Текст отправится после оценки и выбранных причин.
+                </p>
+              </div>
             </div>
           )}
           {error && (
@@ -102,7 +178,7 @@ export default function BotFeedbackCard({
             <Button variant="ghost" size="sm" disabled={busy} onClick={onDismiss}>
               Не сейчас
             </Button>
-            <Button type="submit" size="sm" disabled={!rating || busy} aria-busy={busy}>
+            <Button type="submit" size="sm" disabled={stars === null || busy} aria-busy={busy}>
               {busy ? 'Сохраняем оценку…' : 'Отправить оценку'}
             </Button>
           </div>

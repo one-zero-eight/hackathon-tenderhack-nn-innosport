@@ -23,7 +23,14 @@ from src.modules.dialog.classify import (
     is_thanks,
     reports_ui_defect,
 )
-from src.modules.dialog.llama import DialogLlamaClient, NullLlamaClient, TextCallback, ToolCallback, as_user_message
+from src.modules.dialog.llama import (
+    DialogLlamaClient,
+    ModerationVerdict,
+    NullLlamaClient,
+    TextCallback,
+    ToolCallback,
+    as_user_message,
+)
 from src.modules.dialog.retrieval import KnowledgeRetriever, extractive_answer
 from src.modules.dialog.schemas import (
     Citation,
@@ -308,14 +315,67 @@ class DialogService:
         on_tool: ToolCallback | None = None,
     ) -> DialogResponse:
         scan = scan_abuse(text)
-        if isinstance(self.llama_client, NullLlamaClient) and scan.has_matches:
+        tool_calls: list[ToolCall] = []
+        moderation = None
+        if not accepted_suggestion and (scan.has_matches or has_profanity_or_insult(text)):
+            moderation = await self.llama_client.moderate(text, lexicon_matches=scan.matched_terms)
+            if moderation is None:
+                leftover = usable_rephrase(text)
+                if leftover and has_working_request(text):
+                    moderation = ModerationVerdict(verdict="mixed", cleaned_request=leftover)
+                else:
+                    moderation = ModerationVerdict(verdict="pure_abuse", cleaned_request="")
+            tool_call = ToolCall(
+                id=f"moderate_{uuid4().hex}",
+                name="moderate",
+                arguments=moderation.model_dump(),
+                result={"status": "completed", **moderation.model_dump()},
+            )
+            tool_calls.append(tool_call)
+            if on_tool is not None:
+                await on_tool(tool_call.model_copy(deep=True), "completed")
+        if moderation is not None and moderation.verdict == "mixed":
+            leftover = preferred_rephrase(text, as_user_message(moderation.cleaned_request))
+            if leftover and not has_profanity_or_insult(leftover):
+                moderation = moderation.model_copy(update={"cleaned_request": leftover})
+            elif has_profanity_or_insult(text) or scan.has_matches:
+                moderation = moderation.model_copy(update={"verdict": "pure_abuse", "cleaned_request": ""})
+        if moderation is not None and moderation.verdict == "pure_abuse" and has_working_request(text):
+            leftover = usable_rephrase(text)
+            if leftover and not has_profanity_or_insult(leftover):
+                moderation = moderation.model_copy(update={"verdict": "mixed", "cleaned_request": leftover})
+        if moderation is not None and moderation.verdict == "pure_abuse":
             return self._finish(
                 state,
-                reply=MODEL_UNAVAILABLE_REPLY,
+                reply=ABUSE_REPLY,
+                status=DialogStatus.CLOSED_ABUSE,
+                closed=True,
+                reason="abuse",
+                line=None,
+                tool_calls=tool_calls,
+            )
+        if moderation is not None and moderation.verdict == "mixed":
+            cleaned = as_user_message(moderation.cleaned_request) or usable_rephrase(text)
+            if not cleaned or has_profanity_or_insult(cleaned):
+                return self._finish(
+                    state,
+                    reply=ABUSE_REPLY,
+                    status=DialogStatus.CLOSED_ABUSE,
+                    closed=True,
+                    reason="abuse",
+                    line=None,
+                    tool_calls=tool_calls,
+                )
+            suggestion = SuggestedRephrase(id=uuid4().hex, content=cleaned)
+            return self._finish(
+                state,
+                reply=MIXED_ABUSE_REPLY,
                 status=DialogStatus.CLARIFYING,
                 closed=False,
-                reason="model_unavailable",
+                reason="mixed_abuse",
                 line=None,
+                suggested_rephrase=suggestion,
+                tool_calls=tool_calls,
             )
 
         if pending is None and is_greeting(text):
@@ -381,71 +441,6 @@ class DialogService:
                 )
             )
             history[-1] = ("user", agent_question)
-        tool_calls: list[ToolCall] = []
-        moderation = None
-        if not accepted_suggestion and (scan.has_matches or has_profanity_or_insult(text)):
-            moderation = await self.llama_client.moderate(text, lexicon_matches=scan.matched_terms)
-            if moderation is None:
-                return self._finish(
-                    state,
-                    reply=MODEL_UNAVAILABLE_REPLY,
-                    status=DialogStatus.CLARIFYING,
-                    closed=False,
-                    reason="model_unavailable",
-                    line=None,
-                )
-            tool_call = ToolCall(
-                id=f"moderate_{uuid4().hex}",
-                name="moderate",
-                arguments=moderation.model_dump(),
-                result={"status": "completed", **moderation.model_dump()},
-            )
-            tool_calls.append(tool_call)
-            if on_tool is not None:
-                await on_tool(tool_call.model_copy(deep=True), "completed")
-        if moderation is not None and moderation.verdict == "mixed":
-            leftover = preferred_rephrase(text, as_user_message(moderation.cleaned_request))
-            if leftover and not has_profanity_or_insult(leftover):
-                moderation = moderation.model_copy(update={"cleaned_request": leftover})
-            elif has_profanity_or_insult(text) or scan.has_matches:
-                moderation = moderation.model_copy(update={"verdict": "pure_abuse", "cleaned_request": ""})
-        if moderation is not None and moderation.verdict == "pure_abuse" and has_working_request(text):
-            leftover = usable_rephrase(text)
-            if leftover and not has_profanity_or_insult(leftover):
-                moderation = moderation.model_copy(update={"verdict": "mixed", "cleaned_request": leftover})
-        if moderation is not None and moderation.verdict == "pure_abuse":
-            return self._finish(
-                state,
-                reply=ABUSE_REPLY,
-                status=DialogStatus.CLOSED_ABUSE,
-                closed=True,
-                reason="abuse",
-                line=None,
-                tool_calls=tool_calls,
-            )
-        if moderation is not None and moderation.verdict == "mixed":
-            cleaned = as_user_message(moderation.cleaned_request) or usable_rephrase(text)
-            if not cleaned or has_profanity_or_insult(cleaned):
-                return self._finish(
-                    state,
-                    reply=ABUSE_REPLY,
-                    status=DialogStatus.CLOSED_ABUSE,
-                    closed=True,
-                    reason="abuse",
-                    line=None,
-                    tool_calls=tool_calls,
-                )
-            suggestion = SuggestedRephrase(id=uuid4().hex, content=cleaned)
-            return self._finish(
-                state,
-                reply=MIXED_ABUSE_REPLY,
-                status=DialogStatus.CLARIFYING,
-                closed=False,
-                reason="mixed_abuse",
-                line=None,
-                suggested_rephrase=suggestion,
-                tool_calls=tool_calls,
-            )
         result = await self.llama_client.run(
             agent_question,
             history,

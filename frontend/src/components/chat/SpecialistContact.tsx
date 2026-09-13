@@ -56,23 +56,25 @@ export default function SpecialistContact({ busy, onContact, chat, previewLine, 
     }
   }
 
+  const trigger = (
+    <Button
+      variant={placement === 'message' ? 'outline' : 'ghost'}
+      size="sm"
+      className={placement === 'message' ? 'flex items-center gap-1.5' : 'text-foreground/55 hover:text-foreground flex items-center gap-1.5 text-xs font-normal'}
+      aria-haspopup="dialog"
+      onClick={() => {
+        setSubmitError(false)
+        setOpen(true)
+      }}
+    >
+      <LuHeadset aria-hidden="true" className="size-3.5" />
+      Передать оператору
+    </Button>
+  )
+
   return (
     <>
-      <div className={placement === 'message' ? 'mt-3 flex' : 'mb-2 flex justify-end'}>
-        <Button
-          variant={placement === 'message' ? 'outline' : 'ghost'}
-          size="sm"
-          className={placement === 'message' ? 'flex items-center gap-1.5' : 'text-foreground/55 hover:text-foreground flex items-center gap-1.5 text-xs font-normal'}
-          aria-haspopup="dialog"
-          onClick={() => {
-            setSubmitError(false)
-            setOpen(true)
-          }}
-        >
-          <LuHeadset aria-hidden="true" className="size-3.5" />
-          Передать оператору
-        </Button>
-      </div>
+      {placement === 'message' ? <div className="mt-3 flex">{trigger}</div> : trigger}
       <Dialog open={open} onClose={close} className="relative z-50">
         <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
         <div className="fixed inset-0 overflow-y-auto p-4 sm:p-6">

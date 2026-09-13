@@ -8,7 +8,7 @@ export default function Drawer({ open, onClose, title, side = 'left', children }
     <Dialog open={open} onClose={onClose} className="relative z-50">
       <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
       <div className={`fixed inset-0 flex ${side === 'right' ? 'justify-end' : 'justify-start'}`}>
-        <DialogPanel className="bg-background text-foreground flex h-dvh w-80 max-w-[90vw] flex-col shadow-xl">
+        <DialogPanel className="bg-background text-foreground flex h-dvh w-96 max-w-[90vw] flex-col shadow-xl">
           <div className="border-border flex shrink-0 items-center justify-between border-b p-4">
             <DialogTitle className="text-ui-title font-semibold">{title}</DialogTitle>
             <Button variant="ghost" className="p-2" aria-label="Закрыть панель" onClick={onClose}>

@@ -98,11 +98,18 @@ PROFANE_ROOTS = frozenset(
         "блят",
         "муда",
         "заеб",
+        "хер",
         "гнойн",
         "гнид",
         "мраз",
         "твар",
     }
+)
+SWEAR_IDIOM_RE = re.compile(
+    r"\bкакого\s+(?:хера|хуя|хрена|черта|беса)\b|"
+    r"\bни\s+(?:хера|хуя|черта)\b|"
+    r"\bчто\s+за\s+(?:хер|хуйня|хрень)\b",
+    re.IGNORECASE,
 )
 REPEAT_RE = re.compile(r"(.)\1+")
 ADDRESS_PREFIX = frozenset({"ты", "вы", "тебя", "тебе", "тобой", "твой", "твоя", "твое", "ваш", "ваша", "ваше"})
@@ -170,6 +177,7 @@ def _is_flagged_token(token: str, words: frozenset[str], stems: frozenset[str]) 
 
 def working_remainder(text: str, *, lexicon_path: Path | None = None) -> str:
     words, stems = load_lexicon(lexicon_path)
+    text = SWEAR_IDIOM_RE.sub(" ", text)
     kept = [token for token in tokenize(text, map_latin=True) if not _is_flagged_token(token, words, stems)]
     while kept and kept[0] in ADDRESS_PREFIX:
         kept = kept[1:]
