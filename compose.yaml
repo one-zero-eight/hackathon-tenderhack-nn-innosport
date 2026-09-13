@@ -25,11 +25,13 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       SETTINGS_PATH: /app/settings.docker.yaml
+      HF_HOME: /tmp/huggingface
     ports:
       - "8000:8000"
     volumes:
       - ./backend/settings.docker.yaml:/app/settings.docker.yaml:ro
       - ./data/sample_queries.txt:/data/sample_queries.txt:ro
+      - ./backend/models:/app/models
     restart: unless-stopped
 
   database:

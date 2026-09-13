@@ -1,5 +1,6 @@
 .env
 models/ms-marco-MultiBERT-L-12
+models/cross-encoder-russian-msmarco/
 __MACOSX
 .ms-marco-MultiBERT-L-12
 settings.yaml

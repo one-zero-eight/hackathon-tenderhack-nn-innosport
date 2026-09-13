@@ -339,22 +339,15 @@ class MongoKnowledgeRetriever:
                 continue
             seen_ids.add(hit_id)
             hints.append(hit)
-
-        documents = [hit["text"] for hit in hints]
-        reranked = reranker_repository.rerank(query, documents)[:limit]
-        chunks = []
-        for index in reranked:
-            hit = hints[index["corpus_id"]]
-            chunks.append(
-                Chunk.model_construct(
-                    id=str(hit["id"]),
-                    text=hit["text"],
-                    document=str(PurePosixPath(hit["path"]).name),
-                    section="Раздел не указан",
-                    order=0,
-                    path=str(PurePosixPath(hit["path"])),
-                )
-            )
+        if not hints:
+            return []
+        documents = [str(hit.get("text") or "") for hit in hints]
+        reranked = await asyncio.to_thread(reranker_repository.rerank, query, documents)
+        chunks: list[Chunk] = []
+        for item in reranked[:limit]:
+            chunk = _chunk_from_raw(hints[item["corpus_id"]])
+            if chunk is not None:
+                chunks.append(chunk)
         return chunks
 
     @staticmethod
