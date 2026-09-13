@@ -17,11 +17,13 @@ EMBEDDING_DIMENSION = 1024  # mxbai-embed-large
 
 class KnowledgeChunk(CustomDocument):
     text: str
+    document: str = ""
     section_number: str = ""
     section_title: str = ""
     path: str
     label: str = "manual"  # "manual" | "glossary"
     term: str | None = None
+    order: int = 0  # 0-based, local to (document, section_number, section_title)
     embedding: list[float]
 
     class Settings:
