@@ -318,10 +318,12 @@ class MongoKnowledgeRetriever:
                     "limit": CANDIDATE_LIMIT,
                 }
             },
+            {"$project": {"embedding": 0}},
         ]
         text_pipeline = [
             {"$search": {"index": TEXT_INDEX_NAME, "text": {"query": query, "path": ["text", "section_title"]}}},
             {"$limit": CANDIDATE_LIMIT},
+            {"$project": {"embedding": 0}},
         ]
 
         vector_hits, text_hits = await asyncio.gather(
@@ -334,7 +336,7 @@ class MongoKnowledgeRetriever:
         hints: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         for hit in vector_hits + text_hits:
-            hit_id = str(hit["_id"])
+            hit_id = str(hit["id"])
             if hit_id in seen_ids:
                 continue
             seen_ids.add(hit_id)
